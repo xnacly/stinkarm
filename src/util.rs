@@ -14,22 +14,36 @@ pub fn since_start_ns() -> u128 {
 #[macro_export]
 macro_rules! stinkln {
     () => {
-        $crate::stinkln!(""); // reuse the main rule
+        $crate::stinkln!("");
     };
     ($fmt:expr) => {
         {
             let ns = $crate::util::since_start_ns();
-            println!("[{:>10.3}ms] [stinkarm] {}", ns as f64 / 1_000_000.0, $fmt);
+            println!("[{:>10.3}ms] {}", ns as f64 / 1_000_000.0, $fmt);
         }
     };
     ($fmt:expr, $($arg:tt)*) => {
         {
             let ns = $crate::util::since_start_ns();
             println!(
-                "[{:>10.3}ms] [stinkarm] {}",
+                "[{:>10.3}ms] {}",
                 ns as f64 / 1_000_000.0,
                 format!($fmt, $($arg)*)
             );
         }
+    };
+}
+
+#[macro_export]
+macro_rules! le16 {
+    ($bytes:expr) => {
+        u16::from_le_bytes($bytes.try_into().unwrap())
+    };
+}
+
+#[macro_export]
+macro_rules! le32 {
+    ($bytes:expr) => {
+        u32::from_le_bytes($bytes.try_into().unwrap())
     };
 }

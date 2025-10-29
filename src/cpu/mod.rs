@@ -1,4 +1,6 @@
+/// decoding ARM instructions
 pub mod decoder;
+/// executing ARM instructions
 pub mod exec;
 
 #[derive(Default)]
