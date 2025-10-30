@@ -1,5 +1,5 @@
 {
-  description = "stinkarm — a stinky ARM emulator";
+  description = "stinkarm — ARMv7 userspace binary emulator for x86 linux systems";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -14,7 +14,6 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             rustc
-            cargo
             rust-analyzer
             gdb
             gcc-arm-embedded
@@ -23,8 +22,17 @@
           ];
 
           shellHook = ''
-            echo "🦀 Welcome to stinkarm dev shell"
-            echo "Rust + ARM GCC ready"
+            if ! command -v rustc >/dev/null 2>&1; then
+              echo "Installing rustup toolchain..."
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+              export PATH="$HOME/.cargo/bin:$PATH"
+            fi
+
+            rustup default stable
+
+            rustup target add armv7-unknown-linux-gnueabi
+
+            echo "Welcome to stinkarm dev shell (ARMv7 cross-compilation ready)"
           '';
         };
       });
