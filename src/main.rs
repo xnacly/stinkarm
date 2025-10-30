@@ -1,7 +1,11 @@
 #![allow(dead_code)]
 
-use std::{env, fs::File, io::Read};
+use std::{fs::File, io::Read};
 
+use clap::Parser;
+
+/// configure stinkarm via cli
+pub mod config;
 /// emulating the processor
 pub mod cpu;
 /// parsing Executable and Linkable Format
@@ -11,9 +15,10 @@ pub mod util;
 
 fn main() {
     util::init_timer();
+    let conf = config::Config::parse();
 
-    let path = env::args().nth(1).expect("No binary path given");
-    stinkln!("opening binary `{}`", path);
+    let path = conf.target;
+    stinkln!("opening binary {:?}", path);
     let mut file = File::open(path).expect("Failed to open binary");
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)
@@ -23,7 +28,11 @@ fn main() {
     let header: elf::header::Header = (&buf as &[u8])
         .try_into()
         .expect("Failed to parse binary header");
-    stinkln!("\\\n{}", header);
+
+    if conf.log == config::Log::Elf {
+        stinkln!("\\\n{}", header);
+    }
+
     stinkln!("booting...");
     stinkln!("shutting down");
 }

@@ -5,12 +5,56 @@
 ## Usage
 
 ```text
-$ nix develop
-$ arm-none-eabi-gcc -nostdlib -Ttext=0x8000 target.c -o target.elf
-$ ./stinkarm target.elf
-[     0.012ms] opening binary `target.elf`
-[     0.036ms] parsing elf...
-[     0.040ms] \
+ARMv7 userspace binary emulator for x86 linux systems
+
+Usage: stinkarm [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>
+          Path to the ARM ELF binary to execute
+
+Options:
+      --syscalls <SYSCALLS>
+          Syscall handling mode
+
+          Possible values:
+          - forward: Forward syscalls to the host system (via ARMv7->x86 translation layer)
+          - stub:    Stub syscalls: return success on all invocations
+          - sandbox: Sandbox: only allow a safe subset: no file IO (except fd 0,1,2), no network, no process spawns
+
+          [default: forward]
+
+  -s, --stack-size <STACK_SIZE>
+          Stack size for the emulated process (in bytes)
+
+          [default: 1048576]
+
+  -c, --clear-env
+          Don't pass host env to emulated process
+
+  -l, --log <LOG>
+          Configure what data to log
+
+          [default: none]
+          [possible values: none, elf, segments, syscalls, memory]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print versio
+```
+
+
+### Example
+
+```text
+$ nix develop # enter build env
+$ make # builds examples to elf binaries in examples/
+$ stinkarm -lelf examples/asm.elf
+[     0.366ms] opening binary "examples/asm.elf"
+[     0.415ms] parsing elf...
+[     0.423ms] \
   Magic:                                7f 45 4c 46
   Class:                                ELF32
   Data:                                 2's complement, little endian
@@ -22,16 +66,16 @@ $ ./stinkarm target.elf
   Version:                              0x1
   Entry point address:                  0x8000
   Start of program headers:             52 (bytes into file)
-  Start of section headers:             4724 (bytes into file)
+  Start of section headers:             4600 (bytes into file)
   Flags:                                0x5000200
   Size of this header:                  52 (bytes)
   Size of program headers:              32 (bytes)
   Number of program headers:            1
   Size of section headers:              40 (bytes)
-  Number of section headers:            9
-  Section header string table index:    8
-[     0.082ms] booting...
-[     0.083ms] shutting down
+  Number of section headers:            8
+  Section header string table index:    7
+[     0.496ms] booting...
+[     0.500ms] shutting down
 ```
 
 ## Features
@@ -51,6 +95,7 @@ syscalls to the x86 host system and attempt to make it fast, current progress:
 - [ ] compute initial brk and set up a stack region
 - [ ] build the initial stack (argc/argv/envp/auxv), set SP
 - [ ] initialize CPU state
+- [ ] start decoding instruction words and cpu steps
 - [ ] implement `svc` trapping and a minimal syscall passthrough
 
 ### Arm instructions
@@ -58,13 +103,8 @@ syscalls to the x86 host system and attempt to make it fast, current progress:
 | Done | #   | Instruction | Operands / Notes          | Purpose / Use Case                     | Step |
 | ---- | --- | ----------- | ------------------------- | -------------------------------------- | ---- |
 | ❌   | 1   | MOV         | r0, #imm                  | Load immediate value (e.g., exit code) | 1    |
-| ❌   | 2   | MOV         | r7, #imm                  | Load syscall number into r7            | 1    |
 | ❌   | 3   | SVC         | #0                        | Trap into kernel (syscall)             | 1    |
 | ❌   | 4   | ADR         | r1, label                 | Load address of string literal         | 2    |
-| ❌   | 5   | MOV         | r2, #imm                  | Load string length                     | 2    |
-| ❌   | 6   | MOV         | r0, #1                    | Load stdout fd                         | 2    |
-| ❌   | 7   | MOV         | r7, #4                    | Syscall number for write               | 2    |
-| ❌   | 8   | SVC         | #0                        | Write syscall                          | 2    |
 | ❌   | 9   | LDR         | Rt, [Rn, #offset]         | Load word from memory (stack or heap)  | 3    |
 | ❌   | 10  | STR         | Rt, [Rn, #offset]         | Store word to memory (stack or heap)   | 3    |
 | ❌   | 11  | ADD         | Rd, Rn, Rm / Rd, Rn, #imm | Arithmetic / address calculation       | 3    |
