@@ -6,11 +6,9 @@ use crate::elf::header::ident::Identifier;
 use crate::elf::header::machine::Machine;
 use crate::elf::header::r#type::Type;
 use crate::{le16, le32};
-use std::fmt;
 
-/// Representing the ELF Object File Format header in memory, equivalent to
-///
-/// see Elf32_Ehdr in 2. ELF header in https://gabi.xinuos.com/elf/02-eheader.html
+/// Representing the ELF Object File Format header in memory, equivalent to Elf32_Ehdr in 2. ELF
+/// header in https://gabi.xinuos.com/elf/02-eheader.html
 ///
 /// Types are taken from https://gabi.xinuos.com/elf/01-intro.html#data-representation Table 1.1
 /// 32-Bit Data Types:
@@ -99,59 +97,104 @@ impl TryFrom<&[u8]> for Header {
     }
 }
 
-impl fmt::Display for Header {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "  Magic:\t\t\t\t")?;
-        for b in &self.ident.magic {
-            write!(f, "{:02x} ", b)?;
-        }
-        writeln!(f)?;
+#[cfg(test)]
+mod tests {
+    fn valid_armv7_header_bytes() -> [u8; 52] {
+        let mut bytes = [0u8; 52];
 
-        writeln!(
-            f,
-            "  Class:\t\t\t\tELF{}",
-            if self.ident.class == 1 { "32" } else { "64" }
-        )?;
-        writeln!(
-            f,
-            "  Data:\t\t\t\t\t{}",
-            match self.ident.data {
-                1 => "2's complement, little endian",
-                2 => "2's complement, big endian",
-                _ => "Unknown",
-            }
-        )?;
-        writeln!(f, "  Version:\t\t\t\t{} (current)", self.ident.version)?;
-        writeln!(f, "  OS/ABI:\t\t\t\t{}", self.ident.os_abi)?;
-        writeln!(f, "  ABI Version:\t\t\t\t{}", self.ident.abi_version)?;
-        writeln!(f, "  Type:\t\t\t\t\t{:?}", self.r#type)?;
-        writeln!(f, "  Machine:\t\t\t\t{:?}", self.machine)?;
-        writeln!(f, "  Version:\t\t\t\t0x{:X}", self.version)?;
-        writeln!(f, "  Entry point address:\t\t\t0x{:X}", self.entry)?;
-        writeln!(
-            f,
-            "  Start of program headers:\t\t{} (bytes into file)",
-            self.phoff
-        )?;
-        writeln!(
-            f,
-            "  Start of section headers:\t\t{} (bytes into file)",
-            self.shoff
-        )?;
-        writeln!(f, "  Flags:\t\t\t\t0x{:X}", self.flags)?;
-        writeln!(f, "  Size of this header:\t\t\t{} (bytes)", self.ehsize)?;
-        writeln!(
-            f,
-            "  Size of program headers:\t\t{} (bytes)",
-            self.phentsize
-        )?;
-        writeln!(f, "  Number of program headers:\t\t{}", self.phnum)?;
-        writeln!(
-            f,
-            "  Size of section headers:\t\t{} (bytes)",
-            self.shentsize
-        )?;
-        writeln!(f, "  Number of section headers:\t\t{}", self.shnum)?;
-        write!(f, "  Section header string table index:\t{}", self.shstrndx)
+        // e_ident (16 bytes)
+        bytes[0..4].copy_from_slice(&[0x7f, b'E', b'L', b'F']); // magic
+        bytes[4] = 1; // ELFCLASS32
+        bytes[5] = 1; // ELFDATA2LSB
+        bytes[6] = 1; // EV_CURRENT
+        bytes[7] = 0; // OSABI_NONE
+        bytes[8] = 0; // ABI version
+        bytes[9..16].fill(0); // padding
+
+        // e_type (16..18) = ET_EXEC
+        bytes[16..18].copy_from_slice(&2u16.to_le_bytes());
+
+        // e_machine (18..20) = EM_ARM
+        bytes[18..20].copy_from_slice(&40u16.to_le_bytes());
+
+        // e_version (20..24) = 1
+        bytes[20..24].copy_from_slice(&1u32.to_le_bytes());
+
+        // e_entry (24..28) = 0x8000
+        bytes[24..28].copy_from_slice(&0x8000u32.to_le_bytes());
+
+        // e_phoff (28..32) = 0
+        bytes[28..32].copy_from_slice(&0u32.to_le_bytes());
+
+        // e_shoff (32..36) = 0
+        bytes[32..36].copy_from_slice(&0u32.to_le_bytes());
+
+        // e_flags (36..40) = 0
+        bytes[36..40].copy_from_slice(&0u32.to_le_bytes());
+
+        // e_ehsize (40..42) = 52
+        bytes[40..42].copy_from_slice(&52u16.to_le_bytes());
+
+        // e_phentsize (42..44) = 32 (common)
+        bytes[42..44].copy_from_slice(&32u16.to_le_bytes());
+
+        // e_phnum (44..46) = 1
+        bytes[44..46].copy_from_slice(&1u16.to_le_bytes());
+
+        // e_shentsize (46..48) = 40 (common)
+        bytes[46..48].copy_from_slice(&40u16.to_le_bytes());
+
+        // e_shnum (48..50) = 0
+        bytes[48..50].copy_from_slice(&0u16.to_le_bytes());
+
+        // e_shstrndx (50..52) = 0
+        bytes[50..52].copy_from_slice(&0u16.to_le_bytes());
+
+        bytes
+    }
+
+    #[test]
+    fn test_valid_header() {
+        let bytes = valid_armv7_header_bytes();
+        let header = crate::elf::header::Header::try_from(&bytes[..])
+            .expect("should parse valid ARMv7 ELF header");
+        assert_eq!(header.r#type, crate::elf::header::r#type::Type::Executable);
+        assert_eq!(header.machine, crate::elf::header::machine::Machine::EM_ARM);
+        assert_eq!(header.entry, 0x8000);
+        assert_eq!(header.ehsize, 52);
+    }
+
+    #[test]
+    fn test_invalid_magic() {
+        let mut bytes = valid_armv7_header_bytes();
+        bytes[0] = 0x00;
+        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
+    }
+
+    #[test]
+    fn test_invalid_class() {
+        let mut bytes = valid_armv7_header_bytes();
+        bytes[4] = 2; // ELFCLASS64
+        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
+    }
+
+    #[test]
+    fn test_invalid_machine() {
+        let mut bytes = valid_armv7_header_bytes();
+        bytes[18..20].copy_from_slice(&62u16.to_le_bytes()); // X86_64
+        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
+    }
+
+    #[test]
+    fn test_invalid_type() {
+        let mut bytes = valid_armv7_header_bytes();
+        bytes[16..18].copy_from_slice(&1u16.to_le_bytes()); // ET_REL
+        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
+    }
+
+    #[test]
+    fn test_too_short() {
+        let bytes = [0u8; 10];
+        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
     }
 }

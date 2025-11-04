@@ -57,15 +57,19 @@ impl TryFrom<&[u8]> for Identifier {
             return Err("Unexpected EI_MAG0 to EI_MAG3, wanted 0x7f E L F");
         }
 
-        if header.version != 1 {
+        const ELFCLASS32: u8 = 1;
+        const ELFDATA2LSB: u8 = 1;
+        const EV_CURRENT: u8 = 1;
+
+        if header.version != EV_CURRENT {
             return Err("Unsupported EI_VERSION value");
         }
 
-        if header.class != 1 {
+        if header.class != ELFCLASS32 {
             return Err("Unexpected EI_CLASS: ELFCLASS64, wanted ELFCLASS32 (ARMv7)");
         }
 
-        if header.data != 1 {
+        if header.data != ELFDATA2LSB {
             return Err("Unexpected EI_DATA: big-endian, wanted little");
         }
 

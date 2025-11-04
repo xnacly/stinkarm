@@ -1,6 +1,6 @@
 # Stinkarm
 
-> A stinky user-space arm emulator
+> ARMv7 userspace binary emulator for x86 linux system
 
 ## Usage
 

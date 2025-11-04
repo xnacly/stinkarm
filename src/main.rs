@@ -25,12 +25,10 @@ fn main() {
         .expect("Failed to dump file into memory");
 
     stinkln!("parsing elf...");
-    let header: elf::header::Header = (&buf as &[u8])
-        .try_into()
-        .expect("Failed to parse binary header");
+    let elf: elf::Elf = (&buf as &[u8]).try_into().expect("Failed to parse binary");
 
     if conf.log == config::Log::Elf {
-        stinkln!("\\\n{}", header);
+        stinkln!("\\\n{}", elf);
     }
 
     stinkln!("booting...");

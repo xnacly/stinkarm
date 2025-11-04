@@ -1,104 +1,96 @@
 pub mod header;
+pub mod pheader;
 
-#[cfg(test)]
-mod tests {
+/// Representing an ELF32 binary in memory
+///
+/// This does not include section headers (Elf32_Shdr), but only program headers (Elf32_Phdr), see either `man elf` and/or https://gabi.xinuos.com/elf/03-sheader.html
+#[derive(Debug)]
+pub struct Elf {
+    header: header::Header,
+    pheaders: Vec<pheader::Pheader>,
+}
 
-    fn valid_armv7_header_bytes() -> [u8; 52] {
-        let mut bytes = [0u8; 52];
+impl TryFrom<&[u8]> for Elf {
+    type Error = &'static str;
 
-        // e_ident (16 bytes)
-        bytes[0..4].copy_from_slice(&[0x7f, b'E', b'L', b'F']); // magic
-        bytes[4] = 1; // ELFCLASS32
-        bytes[5] = 1; // ELFDATA2LSB
-        bytes[6] = 1; // EV_CURRENT
-        bytes[7] = 0; // OSABI_NONE
-        bytes[8] = 0; // ABI version
-        bytes[9..16].fill(0); // padding
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let header = header::Header::try_from(b)?;
 
-        // e_type (16..18) = ET_EXEC
-        bytes[16..18].copy_from_slice(&2u16.to_le_bytes());
+        let mut pheaders = Vec::with_capacity(header.phnum as usize);
+        for i in 0..header.phnum {
+            let offset = header.phoff as usize + i as usize * header.phentsize as usize;
+            let ph = pheader::Pheader::from(b, offset)?;
+            pheaders.push(ph);
+        }
 
-        // e_machine (18..20) = EM_ARM
-        bytes[18..20].copy_from_slice(&40u16.to_le_bytes());
-
-        // e_version (20..24) = 1
-        bytes[20..24].copy_from_slice(&1u32.to_le_bytes());
-
-        // e_entry (24..28) = 0x8000
-        bytes[24..28].copy_from_slice(&0x8000u32.to_le_bytes());
-
-        // e_phoff (28..32) = 0
-        bytes[28..32].copy_from_slice(&0u32.to_le_bytes());
-
-        // e_shoff (32..36) = 0
-        bytes[32..36].copy_from_slice(&0u32.to_le_bytes());
-
-        // e_flags (36..40) = 0
-        bytes[36..40].copy_from_slice(&0u32.to_le_bytes());
-
-        // e_ehsize (40..42) = 52
-        bytes[40..42].copy_from_slice(&52u16.to_le_bytes());
-
-        // e_phentsize (42..44) = 32 (common)
-        bytes[42..44].copy_from_slice(&32u16.to_le_bytes());
-
-        // e_phnum (44..46) = 1
-        bytes[44..46].copy_from_slice(&1u16.to_le_bytes());
-
-        // e_shentsize (46..48) = 40 (common)
-        bytes[46..48].copy_from_slice(&40u16.to_le_bytes());
-
-        // e_shnum (48..50) = 0
-        bytes[48..50].copy_from_slice(&0u16.to_le_bytes());
-
-        // e_shstrndx (50..52) = 0
-        bytes[50..52].copy_from_slice(&0u16.to_le_bytes());
-
-        bytes
+        Ok(Elf { header, pheaders })
     }
+}
 
-    #[test]
-    fn test_valid_header() {
-        let bytes = valid_armv7_header_bytes();
-        let header = crate::elf::header::Header::try_from(&bytes[..])
-            .expect("should parse valid ARMv7 ELF header");
-        assert_eq!(header.r#type, crate::elf::header::r#type::Type::Executable);
-        assert_eq!(header.machine, crate::elf::header::machine::Machine::EM_ARM);
-        assert_eq!(header.entry, 0x8000);
-        assert_eq!(header.ehsize, 52);
-    }
+use std::fmt;
 
-    #[test]
-    fn test_invalid_magic() {
-        let mut bytes = valid_armv7_header_bytes();
-        bytes[0] = 0x00;
-        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
-    }
+impl fmt::Display for Elf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let h = &self.header;
 
-    #[test]
-    fn test_invalid_class() {
-        let mut bytes = valid_armv7_header_bytes();
-        bytes[4] = 2; // ELFCLASS64
-        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
-    }
+        writeln!(f, "ELF Header:")?;
+        writeln!(f, "  Magic:              {:02x?}", h.ident.magic)?;
+        writeln!(f, "  Class:              ELF32")?;
+        writeln!(f, "  Data:               Little endian")?;
+        writeln!(f, "  Type:               {:?}", h.r#type)?;
+        writeln!(f, "  Machine:            {:?}", h.machine)?;
+        writeln!(f, "  Version:            {}", h.version)?;
+        writeln!(f, "  Entry point:        0x{:08x}", h.entry)?;
+        writeln!(
+            f,
+            "  Program hdr offset: {} ({} bytes each)",
+            h.phoff, h.phentsize
+        )?;
+        writeln!(f, "  Section hdr offset: {}", h.shoff)?;
+        writeln!(f, "  Flags:              0x{:08x}", h.flags)?;
+        writeln!(f, "  EH size:            {}", h.ehsize)?;
+        writeln!(f, "  # Program headers:  {}", h.phnum)?;
+        writeln!(f, "  # Section headers:  {}", h.shnum)?;
+        writeln!(f, "  Str tbl index:      {}", h.shstrndx)?;
+        writeln!(f)?;
 
-    #[test]
-    fn test_invalid_machine() {
-        let mut bytes = valid_armv7_header_bytes();
-        bytes[18..20].copy_from_slice(&62u16.to_le_bytes()); // X86_64
-        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
-    }
+        if self.pheaders.is_empty() {
+            writeln!(f, "No program headers")?;
+            return Ok(());
+        }
 
-    #[test]
-    fn test_invalid_type() {
-        let mut bytes = valid_armv7_header_bytes();
-        bytes[16..18].copy_from_slice(&1u16.to_le_bytes()); // ET_REL
-        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
-    }
+        writeln!(f, "Program Headers:")?;
+        writeln!(
+            f,
+            "  {:<8} {:>8} {:>10} {:>10} {:>8} {:>8} {:>6} {:>6}",
+            "Type", "Offset", "VirtAddr", "PhysAddr", "FileSz", "MemSz", "Flags", "Align"
+        )?;
 
-    #[test]
-    fn test_too_short() {
-        let bytes = [0u8; 10];
-        assert!(crate::elf::header::Header::try_from(&bytes[..]).is_err());
+        for ph in &self.pheaders {
+            writeln!(
+                f,
+                "  {:<8} 0x{:06x} 0x{:08x} 0x{:08x} 0x{:06x} 0x{:06x} {:>6} 0x{:x}",
+                format!("{:?}", ph.r#type),
+                ph.offset,
+                ph.vaddr,
+                ph.paddr,
+                ph.filesz,
+                ph.memsz,
+                match ph.flags.bits() {
+                    0 => "NONE",
+                    1 => "X",
+                    2 => "W",
+                    3 => "W|X",
+                    4 => "R",
+                    5 => "R|X",
+                    6 => "R|W",
+                    7 => "R|W|X",
+                    _ => "???",
+                },
+                ph.align
+            )?;
+        }
+
+        Ok(())
     }
 }

@@ -15,7 +15,6 @@ pub enum SyscallMode {
 pub enum Log {
     None,
     Elf,
-    Segments,
     Syscalls,
     Memory,
 }

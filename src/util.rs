@@ -36,14 +36,22 @@ macro_rules! stinkln {
 
 #[macro_export]
 macro_rules! le16 {
-    ($bytes:expr) => {
-        u16::from_le_bytes($bytes.try_into().unwrap())
-    };
+    ($bytes:expr) => {{
+        let b: [u8; 2] = match $bytes.try_into() {
+            Ok(b) => b,
+            Err(_) => return Err("expected 4 bytes for le16"),
+        };
+        u16::from_le_bytes(b)
+    }};
 }
 
 #[macro_export]
 macro_rules! le32 {
-    ($bytes:expr) => {
-        u32::from_le_bytes($bytes.try_into().unwrap())
-    };
+    ($bytes:expr) => {{
+        let b: [u8; 4] = match $bytes.try_into() {
+            Ok(b) => b,
+            Err(_) => return Err("expected 4 bytes for le32"),
+        };
+        u32::from_le_bytes(b)
+    }};
 }
