@@ -37,10 +37,9 @@ macro_rules! stinkln {
 #[macro_export]
 macro_rules! le16 {
     ($bytes:expr) => {{
-        let b: [u8; 2] = match $bytes.try_into() {
-            Ok(b) => b,
-            Err(_) => return Err("expected 4 bytes for le16"),
-        };
+        let b: [u8; 2] = $bytes
+            .try_into()
+            .map_err(|_| "Failed to create u32 from 4*u8")?;
         u16::from_le_bytes(b)
     }};
 }
@@ -48,10 +47,9 @@ macro_rules! le16 {
 #[macro_export]
 macro_rules! le32 {
     ($bytes:expr) => {{
-        let b: [u8; 4] = match $bytes.try_into() {
-            Ok(b) => b,
-            Err(_) => return Err("expected 4 bytes for le32"),
-        };
+        let b: [u8; 4] = $bytes
+            .try_into()
+            .map_err(|_| "Failed to create u32 from 4*u8")?;
         u32::from_le_bytes(b)
     }};
 }

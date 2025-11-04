@@ -1,8 +1,6 @@
 #![allow(dead_code)]
-
-use std::{fs::File, io::Read};
-
 use clap::Parser;
+use std::{fs::File, io::Read};
 
 /// configure stinkarm via cli
 pub mod config;
@@ -10,6 +8,10 @@ pub mod config;
 pub mod cpu;
 /// parsing Executable and Linkable Format
 pub mod elf;
+/// memory translation from guest to host
+pub mod mem;
+/// emulating and forwarding syscalls
+pub mod sys;
 /// utilities for all other modules
 pub mod util;
 
@@ -24,13 +26,43 @@ fn main() {
     file.read_to_end(&mut buf)
         .expect("Failed to dump file into memory");
 
-    stinkln!("parsing elf...");
+    stinkln!("parsing ELF...");
     let elf: elf::Elf = (&buf as &[u8]).try_into().expect("Failed to parse binary");
 
     if conf.log == config::Log::Elf {
         stinkln!("\\\n{}", elf);
     }
 
-    stinkln!("booting...");
+    let mut mem = mem::Mem::new();
+
+    for phdr in elf.pheaders {
+        if phdr.r#type == elf::pheader::Type::LOAD {
+            phdr.map(&buf, &mut mem)
+                .expect("Mapping program header failed");
+
+            if conf.log == config::Log::Elf {
+                stinkln!(
+                    "mapped program header `{:?}` of {}B (G={:#X} -> H={:?})",
+                    phdr.r#type,
+                    phdr.memsz,
+                    phdr.vaddr,
+                    mem.translate(phdr.vaddr).unwrap_or(std::ptr::null_mut())
+                );
+            }
+        }
+    }
+
+    let entry = mem
+        .translate(elf.header.entry)
+        .unwrap_or(std::ptr::null_mut());
+
+    stinkln!(
+        "jumping to entry G={:#X}:H={:?}, starting cpu",
+        elf.header.entry,
+        entry
+    );
+
+    let mut cpu = cpu::Cpu::new(elf.header.entry);
+    while cpu.step() {}
     stinkln!("shutting down");
 }

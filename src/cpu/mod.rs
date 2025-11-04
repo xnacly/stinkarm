@@ -44,16 +44,22 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(pc: u32) -> Self {
+        let mut s = Self::default();
+        s.r[13] = pc;
+        s
     }
 
     pub fn reset(&mut self) {
         self.r = [0; 16];
-        self.cpsr = 0;
+        self.cpsr = 0x60000010;
     }
 
-    pub fn step(&mut self) {
+    /// fetch-decode-execute step, will only return false on exit svc
+    pub fn step(&mut self) -> bool {
+        // TODO: 1. fetch word from guest mem
+        // TODO: 2. decode word
+        // TODO: 3. execute word, goto 1
         todo!("Cpu::step")
     }
 }

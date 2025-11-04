@@ -1,9 +1,15 @@
-use crate::le32;
+use crate::{
+    le32, mem,
+    sys::{
+        self,
+        mmap::{MmapFlags, MmapProt},
+    },
+};
 
 /// Phdr, equivalent to Elf32_Phdr, see: https://gabi.xinuos.com/elf/07-pheader.html
 ///
 /// All of its member are u32, be it Elf32_Word, Elf32_Off or Elf32_Addr
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Pheader {
     pub r#type: Type,
     /// offset to the segment, starting from file idx
@@ -27,23 +33,93 @@ pub struct Pheader {
 }
 
 impl Pheader {
-    pub fn from(raw: &[u8], offset: usize) -> Result<Self, &'static str> {
-        if raw.len() < offset + 32 {
-            return Err("Not enough bytes to parse Elf32_Phdr, need at least 32");
+    /// extracts Pheader from raw, starting from offset
+    pub fn from(raw: &[u8], offset: usize) -> Result<Self, String> {
+        let end = offset.checked_add(32).ok_or("Offset overflow")?;
+        if raw.len() < end {
+            return Err("Not enough bytes to parse Elf32_Phdr, need at least 32".into());
         }
 
-        let p_raw = &raw[offset..];
+        let p_raw = &raw[offset..end];
+        let r#type = p_raw[0..4].try_into()?;
+        let flags = p_raw[24..28].try_into()?;
+        let align = le32!(p_raw[28..32]);
+
+        if align > 1 && !align.is_power_of_two() {
+            return Err(format!("Invalid p_align: {}", align));
+        }
 
         Ok(Self {
-            r#type: p_raw[0..4].try_into()?,
+            r#type,
             offset: le32!(p_raw[4..8]),
             vaddr: le32!(p_raw[8..12]),
             paddr: le32!(p_raw[12..16]),
             filesz: le32!(p_raw[16..20]),
             memsz: le32!(p_raw[20..24]),
-            flags: p_raw[24..28].try_into()?,
-            align: le32!(p_raw[28..32]),
+            flags,
+            align,
         })
+    }
+
+    /// mapping applys the configuration of self to the current memory context by creating the
+    /// segments with the corresponding permission bits, vaddr, etc
+    pub fn map(&self, raw: &[u8], guest_mem: &mut mem::Mem) -> Result<(), String> {
+        // zero memory needed case, no clue if this actually ever happens, but we support it
+        if self.memsz == 0 {
+            return Ok(());
+        }
+
+        assert!(
+            self.vaddr != 0,
+            "sanity check so we never have a zero segment start vaddr"
+        );
+
+        // we need page alignement, so either Elf32_Phdr.p_align or 4096
+        let (_, _, len) = self.alignments();
+
+        // Instead of mapping at the guest vaddr (Linux doesnt't allow for low addresses),
+        // we allocate memory wherever the host kernel gives us.
+        // This keeps guest memory sandboxed: guest addr != host addr.
+        let segment = sys::mmap::mmap(
+            None, // let the kernel choose
+            len as usize,
+            MmapProt::WRITE,
+            MmapFlags::ANONYMOUS | MmapFlags::PRIVATE,
+            -1,
+            0,
+        )?;
+
+        let segment_ptr = segment.as_ptr();
+        let segment_slice = unsafe { std::slice::from_raw_parts_mut(segment_ptr, len as usize) };
+
+        let file_slice: &[u8] = &raw[self.offset as usize..(self.offset + self.filesz) as usize];
+
+        // copy the segment contents to the mmaped segment
+        segment_slice[..file_slice.len()].copy_from_slice(file_slice);
+
+        // we need to zero the remaining bytes
+        if self.memsz > self.filesz {
+            segment_slice[file_slice.len()..self.memsz as usize].fill(0);
+        }
+
+        // record mapping in guest memory table, so CPU can translate guest vaddr to host pointer
+        guest_mem.map_region(self.vaddr, len, segment_ptr);
+
+        // we change the permissions for our segment from W to the segments requested bits
+        sys::mmap::mprotect(segment, len as usize, self.flags.into())
+    }
+
+    /// returns (start, end, len)
+    fn alignments(&self) -> (u32, u32, u32) {
+        // we need page alignement, so either Elf32_Phdr.p_align or 4096
+        let align = match self.align {
+            0 => 0x1000,
+            _ => self.align,
+        };
+        let start = self.vaddr & !(align - 1);
+        let end = (self.vaddr + self.memsz + align - 1) & !(align - 1);
+        let len = end - start;
+        (start, end, len)
     }
 }
 
@@ -118,9 +194,9 @@ impl TryFrom<&[u8]> for Type {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
+/// See 7.4. Segment Permission https://gabi.xinuos.com/elf/07-pheader.html#segment-permissions
 pub struct Flags(u32);
 
-/// See 7.4. Segment Permission https://gabi.xinuos.com/elf/07-pheader.html#segment-permissions
 impl Flags {
     pub const NONE: Self = Flags(0x0);
     pub const X: Self = Flags(0x1);

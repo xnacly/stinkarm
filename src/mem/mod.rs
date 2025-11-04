@@ -1,0 +1,65 @@
+use std::collections::BTreeMap;
+
+use crate::sys;
+
+struct MappedSegment {
+    host_ptr: *mut u8,
+    len: u32,
+}
+
+pub struct Mem {
+    maps: BTreeMap<u32, MappedSegment>,
+}
+
+impl Mem {
+    pub fn new() -> Self {
+        Self {
+            maps: BTreeMap::new(),
+        }
+    }
+
+    pub fn map_region(&mut self, guest_addr: u32, len: u32, host_ptr: *mut u8) {
+        self.maps
+            .insert(guest_addr, MappedSegment { host_ptr, len });
+    }
+
+    /// translate a guest addr to a host addr we can write and read from
+    pub fn translate(&self, guest_addr: u32) -> Option<*mut u8> {
+        // walk segments until guest_addr is contained
+        for (&base, seg) in &self.maps {
+            if guest_addr >= base && guest_addr < base + seg.len {
+                let offset = guest_addr - base;
+                unsafe {
+                    return Some(seg.host_ptr.add(offset as usize));
+                }
+            }
+        }
+        None
+    }
+
+    pub fn read_u32(&self, guest_addr: u32) -> Option<u32> {
+        let ptr = self.translate(guest_addr)?;
+        unsafe { Some(u32::from_le(*(ptr as *const u32))) }
+    }
+
+    pub fn write_u32(&mut self, guest_addr: u32, value: u32) -> Result<(), &'static str> {
+        let ptr = self.translate(guest_addr).ok_or_else(|| "hola")?;
+        unsafe { *(ptr as *mut u32) = value.to_le() }
+        Ok(())
+    }
+}
+
+impl Drop for Mem {
+    fn drop(&mut self) {
+        for (guest_addr, seg) in &self.maps {
+            if let Some(nnptr) = std::ptr::NonNull::new(seg.host_ptr) {
+                if let Err(e) = sys::mmap::munmap(nnptr, seg.len as usize) {
+                    eprintln!(
+                        "Warning: failed to munmap guest segment @ {:#010x} (len={}): {:?}",
+                        guest_addr, seg.len, e
+                    );
+                }
+            }
+        }
+    }
+}

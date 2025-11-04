@@ -6,15 +6,15 @@ pub mod pheader;
 /// This does not include section headers (Elf32_Shdr), but only program headers (Elf32_Phdr), see either `man elf` and/or https://gabi.xinuos.com/elf/03-sheader.html
 #[derive(Debug)]
 pub struct Elf {
-    header: header::Header,
-    pheaders: Vec<pheader::Pheader>,
+    pub header: header::Header,
+    pub pheaders: Vec<pheader::Pheader>,
 }
 
 impl TryFrom<&[u8]> for Elf {
-    type Error = &'static str;
+    type Error = String;
 
-    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
-        let header = header::Header::try_from(b)?;
+    fn try_from(b: &[u8]) -> Result<Self, String> {
+        let header = header::Header::try_from(b).map_err(|e| e.to_string())?;
 
         let mut pheaders = Vec::with_capacity(header.phnum as usize);
         for i in 0..header.phnum {
@@ -40,7 +40,7 @@ impl fmt::Display for Elf {
         writeln!(f, "  Type:               {:?}", h.r#type)?;
         writeln!(f, "  Machine:            {:?}", h.machine)?;
         writeln!(f, "  Version:            {}", h.version)?;
-        writeln!(f, "  Entry point:        0x{:08x}", h.entry)?;
+        writeln!(f, "  Entry point:        0x{:x}", h.entry)?;
         writeln!(
             f,
             "  Program hdr offset: {} ({} bytes each)",
