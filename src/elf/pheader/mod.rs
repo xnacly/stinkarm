@@ -69,10 +69,9 @@ impl Pheader {
             return Ok(());
         }
 
-        assert!(
-            self.vaddr != 0,
-            "sanity check so we never have a zero segment start vaddr"
-        );
+        if self.vaddr == 0 {
+            return Err("program header has a zero virtual address".into());
+        }
 
         // we need page alignement, so either Elf32_Phdr.p_align or 4096
         let (_, _, len) = self.alignments();

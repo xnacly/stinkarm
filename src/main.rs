@@ -8,6 +8,7 @@ pub mod config;
 pub mod cpu;
 /// parsing Executable and Linkable Format
 pub mod elf;
+pub mod err;
 /// memory translation from guest to host
 pub mod mem;
 /// emulating and forwarding syscalls
@@ -19,7 +20,7 @@ fn main() {
     util::init_timer();
     let conf = config::Config::parse();
 
-    let path = conf.target;
+    let path = &conf.target;
     stinkln!("opening binary {:?}", path);
     let mut file = File::open(path).expect("Failed to open binary");
     let mut buf = Vec::new();
@@ -62,7 +63,19 @@ fn main() {
         entry
     );
 
-    let mut cpu = cpu::Cpu::new(elf.header.entry);
-    while cpu.step() {}
+    let mut cpu = cpu::Cpu::new(&conf, &mut mem, elf.header.entry);
+    loop {
+        let step = cpu.step();
+        match step {
+            // EOI - end of instructions :^)
+            Ok(false) => break,
+            Err(err) => {
+                println!("err: `{:?}`, exiting emulation", err);
+                break;
+            }
+            Ok(true) => {}
+        }
+    }
+
     stinkln!("shutting down");
 }

@@ -25,16 +25,14 @@ impl Mem {
 
     /// translate a guest addr to a host addr we can write and read from
     pub fn translate(&self, guest_addr: u32) -> Option<*mut u8> {
-        // walk segments until guest_addr is contained
-        for (&base, seg) in &self.maps {
-            if guest_addr >= base && guest_addr < base + seg.len {
-                let offset = guest_addr - base;
-                unsafe {
-                    return Some(seg.host_ptr.add(offset as usize));
-                }
-            }
+        // Find the greatest key ≤ guest_addr.
+        let (&base, seg) = self.maps.range(..=guest_addr).next_back()?;
+        if guest_addr < base + seg.len {
+            let offset = guest_addr - base;
+            Some(unsafe { seg.host_ptr.add(offset as usize) })
+        } else {
+            None
         }
-        None
     }
 
     pub fn read_u32(&self, guest_addr: u32) -> Option<u32> {
@@ -51,7 +49,8 @@ impl Mem {
 
 impl Drop for Mem {
     fn drop(&mut self) {
-        for (guest_addr, seg) in &self.maps {
+        let maps = std::mem::take(&mut self.maps);
+        for (guest_addr, seg) in maps {
             if let Some(nnptr) = std::ptr::NonNull::new(seg.host_ptr) {
                 if let Err(e) = sys::mmap::munmap(nnptr, seg.len as usize) {
                     eprintln!(
