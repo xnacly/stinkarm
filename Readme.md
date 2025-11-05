@@ -14,22 +14,22 @@ Arguments:
           Path to the ARM ELF binary to execute
 
 Options:
-      --syscalls <SYSCALLS>
+  -C, --syscalls <SYSCALLS>
           Syscall handling mode
 
           Possible values:
           - forward: Forward syscalls to the host system (via ARMv7->x86 translation layer)
           - stub:    Stub syscalls: return success on all invocations
-          - sandbox: Sandbox: only allow a safe subset: no file IO (except fd 0,1,2), no netw ork, no process spawns
+          - sandbox: Sandbox: only allow a safe subset: no file IO (except fd 0,1,2), no network, no process spawns
 
-          [default: forward]
+          [default: sandbox]
 
   -s, --stack-size <STACK_SIZE>
           Stack size for the emulated process (in bytes)
 
           [default: 1048576]
 
-  -c, --clear-env
+  -n, --no-env
           Don't pass host env to emulated process
 
   -l, --log <LOG>
@@ -52,9 +52,11 @@ Options:
 $ nix develop # enter build env
 $ make # builds examples to elf binaries in examples/
 $ stinkarm -lelf --syscalls=stub examples/asm.elf
-[     0.612ms] opening binary "examples/asm.elf"
-[     0.690ms] parsing ELF...
-[     0.708ms] \
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/stinkarm -lelf -Cstub examples/asm.elf`
+[     0.302ms] opening binary "examples/asm.elf"
+[     0.330ms] parsing ELF...
+[     0.339ms] \
 ELF Header:
   Magic:              [7f, 45, 4c, 46]
   Class:              ELF32
@@ -75,15 +77,15 @@ Program Headers:
   Type       Offset   VirtAddr   PhysAddr   FileSz    MemSz  Flags  Align
   LOAD     0x001000 0x00008000 0x00008000 0x00000c 0x00000c    R|X 0x1000
 
-[     0.800ms] mapped program header `LOAD` of 12B (G=0x8000 -> H=0x7ffff7f89000)
-[     0.818ms] jumping to entry G=0x8000:H=0x7ffff7f89000, starting cpu
-[     0.829ms] shutting down
-$ stinkarm -lsyscalls --syscalls=stub examples/asm.elf
-[     0.759ms] opening binary "examples/asm.elf"
-[     0.871ms] parsing ELF...
-[     0.937ms] jumping to entry G=0x8000:H=0x7ffff7f89000, starting cpu
-[     0.954ms] [stubbing] syscall=1
-[     0.965ms] shutting down
+[     0.371ms] mapped program header `LOAD` of 12B (G=0x8000 -> H=0x7ffff7f87000)
+[     0.378ms] jumping to entry G=0x8000:H=0x7ffff7f87000, starting cpu
+[     0.383ms] got exit code `161`, forwarding to host
+$ stinkarm -lsyscalls -Cstub examples/asm.elf
+[     0.291ms] opening binary "examples/asm.elf"
+[     0.322ms] parsing ELF...
+[     0.344ms] jumping to entry G=0x8000:H=0x7ffff7f87000, starting cpu
+[     0.360ms] [stubbing] syscall=Ok(Exit), returning -EACCES
+[     0.364ms] got exit code `161`, forwarding to host
 ```
 
 ## Features

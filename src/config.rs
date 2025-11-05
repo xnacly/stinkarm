@@ -30,7 +30,7 @@ pub struct Config {
     pub target: PathBuf,
 
     /// Syscall handling mode
-    #[arg(long, value_enum, default_value_t = SyscallMode::Forward)]
+    #[arg(short = 'C', long, value_enum, default_value_t = SyscallMode::Sandbox)]
     pub syscalls: SyscallMode,
 
     /// Stack size for the emulated process (in bytes)
@@ -39,7 +39,7 @@ pub struct Config {
 
     /// Don't pass host env to emulated process
     #[arg(short, long)]
-    pub clear_env: bool,
+    pub no_env: bool,
 
     /// Configure what data to log
     #[arg(short, long, value_enum, default_value_t = Log::None)]

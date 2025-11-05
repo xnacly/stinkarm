@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use clap::Parser;
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, process::exit};
 
 /// configure stinkarm via cli
 pub mod config;
@@ -65,8 +65,7 @@ fn main() {
 
     let mut cpu = cpu::Cpu::new(&conf, &mut mem, elf.header.entry);
     loop {
-        let step = cpu.step();
-        match step {
+        match cpu.step() {
             // EOI - end of instructions :^)
             Ok(false) => break,
             Err(err) => {
@@ -75,7 +74,14 @@ fn main() {
             }
             Ok(true) => {}
         }
+
+        if let Some(status) = cpu.status {
+            stinkln!("got exit code `{}`, forwarding to host", status);
+            break;
+        }
     }
 
-    stinkln!("shutting down");
+    let status = cpu.status.unwrap_or_else(|| 0);
+    mem.destroy();
+    exit(status);
 }

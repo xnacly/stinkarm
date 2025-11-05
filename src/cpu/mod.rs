@@ -1,21 +1,17 @@
 use crate::{
     config::{self, Log, SyscallMode},
-    cpu::decoder::InstructionContainer,
+    cpu::{decoder::InstructionContainer, translation::ArmSyscall},
     err, mem, stinkln,
 };
 
 /// decoding ARM instructions
-pub mod decoder;
-/// executing ARM instructions
-pub mod exec;
+mod decoder;
+/// sandboxing the emulator
+mod sandbox;
+/// translating various things from arm to x86
+mod translation;
 
-type SyscallHandlerFn = fn(&mut Cpu) -> u32;
-fn syscall_forward(cpu: &mut Cpu) -> u32 {
-    todo!("syscall_forward")
-}
-fn syscall_sandbox(cpu: &mut Cpu) -> u32 {
-    todo!("syscall_sandbox")
-}
+type SyscallHandlerFn = fn(&mut Cpu) -> i32;
 
 /// Usermode emulation
 pub struct Cpu<'cpu> {
@@ -24,6 +20,8 @@ pub struct Cpu<'cpu> {
     cpsr: u32,
     mem: &'cpu mut mem::Mem,
     syscall_handler: SyscallHandlerFn,
+    /// only set by ArmSyscall::Exit, necessary to propagate exit code to the host
+    pub status: Option<i32>,
 }
 
 impl<'cpu> Cpu<'cpu> {
@@ -31,23 +29,26 @@ impl<'cpu> Cpu<'cpu> {
         let syscall_handler: SyscallHandlerFn = if conf.log == Log::Syscalls {
             match conf.syscalls {
                 SyscallMode::Forward => |cpu| {
-                    stinkln!("[forward] syscall={}", cpu.r[7]);
-                    syscall_forward(cpu)
+                    stinkln!("[forward] syscall={:?}", ArmSyscall::try_from(cpu.r[7]));
+                    translation::syscall_forward(cpu)
                 },
                 SyscallMode::Sandbox => |cpu| {
-                    stinkln!("[sandbox] syscall={}", cpu.r[7]);
-                    syscall_sandbox(cpu)
+                    stinkln!("[sandbox] syscall={:?}", ArmSyscall::try_from(cpu.r[7]));
+                    sandbox::syscall_sandbox(cpu)
                 },
                 SyscallMode::Stub => |cpu| {
-                    stinkln!("[stubbing] syscall={}", cpu.r[7]);
-                    0
+                    stinkln!(
+                        "[stubbing] syscall={:?}, returning -EACCES",
+                        ArmSyscall::try_from(cpu.r[7])
+                    );
+                    sandbox::syscall_stub(cpu)
                 },
             }
         } else {
             match conf.syscalls {
-                SyscallMode::Forward => syscall_forward,
-                SyscallMode::Sandbox => syscall_sandbox,
-                SyscallMode::Stub => |_| 0,
+                SyscallMode::Forward => translation::syscall_forward,
+                SyscallMode::Sandbox => sandbox::syscall_sandbox,
+                SyscallMode::Stub => sandbox::syscall_stub,
             }
         };
 
@@ -56,6 +57,7 @@ impl<'cpu> Cpu<'cpu> {
             cpsr: 0x60000010,
             mem,
             syscall_handler,
+            status: None,
         };
         s.r[15] = pc;
         s
@@ -115,7 +117,7 @@ impl<'cpu> Cpu<'cpu> {
                 self.advance();
             }
             decoder::Instruction::Svc => {
-                self.r[0] = (self.syscall_handler)(self);
+                self.r[0] = (self.syscall_handler)(self) as u32;
                 self.advance();
             }
             decoder::Instruction::Unknown(w) => {

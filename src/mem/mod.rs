@@ -45,12 +45,11 @@ impl Mem {
         unsafe { *(ptr as *mut u32) = value.to_le() }
         Ok(())
     }
-}
 
-impl Drop for Mem {
-    fn drop(&mut self) {
-        let maps = std::mem::take(&mut self.maps);
-        for (guest_addr, seg) in maps {
+    /// dropping all segments, consumes self to make it single use and not allow any self usages
+    /// after dropping
+    pub fn destroy(self) {
+        for (guest_addr, seg) in self.maps {
             if let Some(nnptr) = std::ptr::NonNull::new(seg.host_ptr) {
                 if let Err(e) = sys::mmap::munmap(nnptr, seg.len as usize) {
                     eprintln!(
