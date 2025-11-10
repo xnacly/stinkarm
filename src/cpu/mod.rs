@@ -124,7 +124,7 @@ impl<'cpu> Cpu<'cpu> {
                 return Err(err::Err::UnknownOrUnsupportedInstruction(w));
             }
             i @ _ => {
-                stinkln!("skipping unimplemented instruction ({:#x})->{:?}", word, i);
+                stinkln!("skipping unimplemented instruction {:#x}:{:?}", word, i);
                 self.advance();
             }
         }

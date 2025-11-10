@@ -1,4 +1,4 @@
-use crate::err;
+use crate::{err, sys};
 
 /// sourced from https://chromium.googlesource.com/chromiumos/docs/+/master/constants/syscalls.md#arm-32_bit_EABI
 #[derive(Debug)]
@@ -32,9 +32,11 @@ impl TryFrom<u32> for ArmSyscall {
 pub fn syscall_forward(cpu: &mut super::Cpu) -> i32 {
     match ArmSyscall::try_from(cpu.r[7]).expect("Unregistered syscall") {
         // we catch exit fully, since we need to do cleanup after the program is done
-        ArmSyscall::Exit => cpu.status = Some(cpu.r[0] as i32),
+        ArmSyscall::Exit => {
+            cpu.status = Some(cpu.r[0] as i32);
+            0
+        }
+        ArmSyscall::Write => sys::write(cpu.r[0], cpu.r[1], cpu.r[2]),
         c @ _ => todo!("{:?}", c),
     }
-
-    return 0;
 }

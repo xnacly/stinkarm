@@ -11,7 +11,7 @@ pub mod elf;
 pub mod err;
 /// memory translation from guest to host
 pub mod mem;
-/// emulating and forwarding syscalls
+/// emulating, forwarding and implementing syscalls
 pub mod sys;
 /// utilities for all other modules
 pub mod util;
@@ -75,8 +75,7 @@ fn main() {
             Ok(true) => {}
         }
 
-        if let Some(status) = cpu.status {
-            stinkln!("got exit code `{}`, forwarding to host", status);
+        if cpu.status.is_some() {
             break;
         }
     }

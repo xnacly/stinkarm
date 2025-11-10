@@ -1,10 +1,5 @@
-use crate::{
-    le32, mem,
-    sys::{
-        self,
-        mmap::{MmapFlags, MmapProt},
-    },
-};
+use crate::mem::mmap::{MmapFlags, MmapProt};
+use crate::{le32, mem};
 
 /// Phdr, equivalent to Elf32_Phdr, see: https://gabi.xinuos.com/elf/07-pheader.html
 ///
@@ -79,7 +74,7 @@ impl Pheader {
         // Instead of mapping at the guest vaddr (Linux doesnt't allow for low addresses),
         // we allocate memory wherever the host kernel gives us.
         // This keeps guest memory sandboxed: guest addr != host addr.
-        let segment = sys::mmap::mmap(
+        let segment = mem::mmap::mmap(
             None,
             len as usize,
             MmapProt::WRITE,
@@ -105,7 +100,7 @@ impl Pheader {
         guest_mem.map_region(self.vaddr, len, segment_ptr);
 
         // we change the permissions for our segment from W to the segments requested bits
-        sys::mmap::mprotect(segment, len as usize, self.flags.into())
+        mem::mmap::mprotect(segment, len as usize, self.flags.into())
     }
 
     /// returns (start, end, len)

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::sys;
+pub mod mmap;
 
 struct MappedSegment {
     host_ptr: *mut u8,
@@ -51,7 +51,7 @@ impl Mem {
     pub fn destroy(self) {
         for (guest_addr, seg) in self.maps {
             if let Some(nnptr) = std::ptr::NonNull::new(seg.host_ptr) {
-                if let Err(e) = sys::mmap::munmap(nnptr, seg.len as usize) {
+                if let Err(e) = mmap::munmap(nnptr, seg.len as usize) {
                     eprintln!(
                         "Warning: failed to munmap guest segment @ {:#010x} (len={}): {:?}",
                         guest_addr, seg.len, e
