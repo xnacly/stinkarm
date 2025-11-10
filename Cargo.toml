@@ -2,6 +2,15 @@
 name = "stinkarm"
 version = "0.1.0"
 edition = "2024"
+default-run = "stinkarm"
 
 [dependencies]
 clap = { version = "4.5.51", features = ["derive"] }
+
+[[bin]]
+name = "stinkarm"
+path = "src/main.rs"
+
+[[bin]]
+name = "bld_exmpl"
+path = "tools/bld_exmpl.rs"

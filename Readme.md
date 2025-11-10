@@ -50,8 +50,8 @@ Options:
 
 ```text
 $ nix develop # enter build env
-$ make # builds examples to elf binaries in examples/
-$ stinkarm -lelf --syscalls=stub examples/asm.elf
+$ # builds examples to elf binaries in examples/
+$ cargo run -- -lelf --syscalls=stub examples/asm.elf
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
      Running `target/debug/stinkarm -lelf -Cstub examples/asm.elf`
 [     0.302ms] opening binary "examples/asm.elf"
@@ -80,7 +80,7 @@ Program Headers:
 [     0.371ms] mapped program header `LOAD` of 12B (G=0x8000 -> H=0x7ffff7f87000)
 [     0.378ms] jumping to entry G=0x8000:H=0x7ffff7f87000, starting cpu
 [     0.383ms] got exit code `161`, forwarding to host
-$ stinkarm -lsyscalls -Cstub examples/asm.elf
+$ cargo run -- -lsyscalls -Cstub examples/asm.elf
 [     0.291ms] opening binary "examples/asm.elf"
 [     0.322ms] parsing ELF...
 [     0.344ms] jumping to entry G=0x8000:H=0x7ffff7f87000, starting cpu
@@ -124,8 +124,8 @@ _start:
 | ---- | --- | ----------- | ------------------------- | -------------------------------------- | ---- |
 | ✅   | 1   | MOV         | r0, #imm                  | Load immediate value (e.g., exit code) | 1    |
 | ✅   | 3   | SVC         | #0                        | Trap into kernel (syscall)             | 1    |
-| ❌   | 4   | ADR         | r1, label                 | Load address of string literal         | 2    |
 | ❌   | 9   | LDR         | Rt, [Rn, #offset]         | Load word from memory (stack or heap)  | 3    |
+| ❌   | 4   | ADR         | r1, label                 | Load address of string literal         | 2    |
 | ❌   | 10  | STR         | Rt, [Rn, #offset]         | Store word to memory (stack or heap)   | 3    |
 | ❌   | 11  | ADD         | Rd, Rn, Rm / Rd, Rn, #imm | Arithmetic / address calculation       | 3    |
 | ❌   | 12  | SUB         | Rd, Rn, Rm / Rd, Rn, #imm | Arithmetic / address calculation       | 3    |

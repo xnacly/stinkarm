@@ -1,6 +1,5 @@
 {
   description = "stinkarm — ARMv7 userspace binary emulator for x86 linux systems";
-
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
@@ -18,5 +17,6 @@
             qemu
           ];
         };
-      });
+      }
+  );
 }
