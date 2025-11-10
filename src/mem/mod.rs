@@ -25,7 +25,7 @@ impl Mem {
 
     /// translate a guest addr to a host addr we can write and read from
     pub fn translate(&self, guest_addr: u32) -> Option<*mut u8> {
-        // Find the greatest key ≤ guest_addr.
+        // Find the greatest key <= guest_addr.
         let (&base, seg) = self.maps.range(..=guest_addr).next_back()?;
         if guest_addr < base + seg.len {
             let offset = guest_addr - base;

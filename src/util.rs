@@ -39,7 +39,7 @@ macro_rules! le16 {
     ($bytes:expr) => {{
         let b: [u8; 2] = $bytes
             .try_into()
-            .map_err(|_| "Failed to create u32 from 4*u8")?;
+            .map_err(|_| "Failed to create u16 from 2*u8")?;
         u16::from_le_bytes(b)
     }};
 }

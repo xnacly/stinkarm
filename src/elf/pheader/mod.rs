@@ -80,7 +80,7 @@ impl Pheader {
         // we allocate memory wherever the host kernel gives us.
         // This keeps guest memory sandboxed: guest addr != host addr.
         let segment = sys::mmap::mmap(
-            None, // let the kernel choose
+            None,
             len as usize,
             MmapProt::WRITE,
             MmapFlags::ANONYMOUS | MmapFlags::PRIVATE,

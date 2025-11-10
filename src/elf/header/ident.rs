@@ -43,7 +43,7 @@ impl TryFrom<&[u8]> for Identifier {
 
         // I dont want to cast via unsafe as_ptr and as Header because the header could outlive the
         // source slice, thus we just do it the old plain indexing way
-        let header = Self {
+        let ident = Self {
             magic: bytes[0..4].try_into().unwrap(),
             class: bytes[4],
             data: bytes[5],
@@ -53,7 +53,7 @@ impl TryFrom<&[u8]> for Identifier {
             _pad: bytes[9..16].try_into().unwrap(),
         };
 
-        if header.magic != [0x7f, b'E', b'L', b'F'] {
+        if ident.magic != [0x7f, b'E', b'L', b'F'] {
             return Err("Unexpected EI_MAG0 to EI_MAG3, wanted 0x7f E L F");
         }
 
@@ -61,18 +61,18 @@ impl TryFrom<&[u8]> for Identifier {
         const ELFDATA2LSB: u8 = 1;
         const EV_CURRENT: u8 = 1;
 
-        if header.version != EV_CURRENT {
+        if ident.version != EV_CURRENT {
             return Err("Unsupported EI_VERSION value");
         }
 
-        if header.class != ELFCLASS32 {
+        if ident.class != ELFCLASS32 {
             return Err("Unexpected EI_CLASS: ELFCLASS64, wanted ELFCLASS32 (ARMv7)");
         }
 
-        if header.data != ELFDATA2LSB {
+        if ident.data != ELFDATA2LSB {
             return Err("Unexpected EI_DATA: big-endian, wanted little");
         }
 
-        Ok(header)
+        Ok(ident)
     }
 }
