@@ -1,5 +1,7 @@
 mod write;
 
+pub use write::write;
+
 #[repr(i32)]
 pub enum Errno {
     /// Operation not permitted
@@ -20,8 +22,8 @@ pub enum Errno {
     ENOMEM = 12,
     /// Permission denied
     EACCES = 13,
+    /// Bad address
+    EFAULT = 14,
     /// System call unimplemented
     ENOSYS = 38,
 }
-
-pub use write::write;

@@ -11,6 +11,7 @@ pub enum Instruction {
     Branch { link: bool, target_offset: i32 },
     Svc,
     Unknown(u32),
+    LdrLiteral { rd: u8, addr: u32 },
 }
 
 /// The 4‑bit primary opcode field (bits 24‑21) for dpi instructions, nonexhaustive list
@@ -73,9 +74,45 @@ fn decode_rotated_imm(imm12: u32) -> u32 {
 
 /// process bits defined in word and construct the equivalent Instruction
 /// Turn a raw 32‑bit ARM word into an Instruction
-pub fn decode_word(word: u32) -> InstructionContainer {
+pub fn decode_word(word: u32, caddr: u32) -> InstructionContainer {
     let cond = ((word >> 28) & 0xF) as u8;
     let top = ((word >> 25) & 0x7) as u8; // bits 27:25
+
+    // load and store class
+    if (top >> 1) & 0b11 == 0b01 {
+        // preindex
+        let p = ((word >> 24) & 1) != 0;
+        // add
+        let u = ((word >> 23) & 1) != 0;
+        // byte
+        let b = ((word >> 22) & 1) != 0;
+        // write back
+        let w = ((word >> 21) & 1) != 0;
+        // load
+        let l = ((word >> 20) & 1) != 0;
+        // base register
+        let rn = ((word >> 16) & 0xF) as u8;
+        // destination for load or store
+        let rd = ((word >> 12) & 0xF) as u8;
+        let imm12 = (word & 0xFFF) as u32;
+
+        // Literal‑pool version
+        if l && rn == 0b1111 && p && u && !w && !b {
+            // PC is address_of_this_word + 8
+            let pc_seen = caddr.wrapping_add(8);
+            let literal_addr = pc_seen.wrapping_add(imm12);
+
+            return InstructionContainer {
+                cond,
+                instruction: Instruction::LdrLiteral {
+                    rd,
+                    addr: literal_addr,
+                },
+            };
+        }
+
+        todo!("only LDR with p&u&!w&!b is implemented")
+    }
 
     // Branch (top == 0b101) is a simple case
     if top == 0b101 {

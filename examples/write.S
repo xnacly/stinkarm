@@ -1,4 +1,5 @@
 @ write a 0 ptr, len 0 to stdout (fd1)
+
     .global _start
 _start:
     mov r0, #1              

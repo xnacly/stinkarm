@@ -103,6 +103,27 @@ _start:
     svc #0
 ```
 
+- [x] asm hello world 
+
+```asm
+    .section .rodata
+msg:
+    .asciz "Hello, world!\n"
+
+    .section .text
+    .global _start
+_start:
+    ldr r0, =1
+    ldr r1, =msg                
+    mov r2, #14                 
+    mov r7, #4                  
+    svc #0                      
+
+    mov r0, #0                  
+    mov r7, #1                  
+    svc #0                      
+```
+
 - [ ] `int main(void){ return 0; }`
 - [ ] hello world with `puts`
 - [ ] minimal libc based application
@@ -124,7 +145,7 @@ _start:
 | ---- | --- | ----------- | ------------------------- | -------------------------------------- | ---- |
 | ✅   | 1   | MOV         | r0, #imm                  | Load immediate value (e.g., exit code) | 1    |
 | ✅   | 3   | SVC         | #0                        | Trap into kernel (syscall)             | 1    |
-| ❌   | 9   | LDR         | Rt, [Rn, #offset]         | Load word from memory (stack or heap)  | 3    |
+| ✅   | 9   | LDR         | Rt, [Rn, #offset]         | Load word from memory (stack or heap)  | 3    |
 | ❌   | 4   | ADR         | r1, label                 | Load address of string literal         | 2    |
 | ❌   | 10  | STR         | Rt, [Rn, #offset]         | Store word to memory (stack or heap)   | 3    |
 | ❌   | 11  | ADD         | Rd, Rn, Rm / Rd, Rn, #imm | Arithmetic / address calculation       | 3    |
@@ -141,7 +162,7 @@ _start:
 | ---- | --- | --------------- | -------- | --------------------- | ------------------------ | ----------------------- | ---------------------------------- | ------------ | ------------ |
 | ✅   | 1   | exit            | 0x900001 | int error_code        | -                        | -                       | -                                  | -            | -            |
 | ❌   | 3   | read            | 0x900003 | unsigned int fd       | char \*buf               | size_t count            | -                                  | -            | -            |
-| ❌   | 4   | write           | 0x900004 | unsigned int fd       | const char \*buf         | size_t count            | -                                  | -            | -            |
+| ✅   | 4   | write           | 0x900004 | unsigned int fd       | const char \*buf         | size_t count            | -                                  | -            | -            |
 | ❌   | 5   | open            | 0x900005 | const char \*filename | int flags                | umode_t mode            | -                                  | -            | -            |
 | ❌   | 6   | close           | 0x900006 | unsigned int fd       | -                        | -                       | -                                  | -            | -            |
 | ❌   | 10  | execve          | 0x90000b | const char \*filename | const char *const *argv  | const char *const *envp | -                                  | -            | -            |

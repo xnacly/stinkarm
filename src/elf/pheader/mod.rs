@@ -69,7 +69,7 @@ impl Pheader {
         }
 
         // we need page alignement, so either Elf32_Phdr.p_align or 4096
-        let (_, _, len) = self.alignments();
+        let (start, _end, len) = self.alignments();
 
         // Instead of mapping at the guest vaddr (Linux doesnt't allow for low addresses),
         // we allocate memory wherever the host kernel gives us.
@@ -86,14 +86,20 @@ impl Pheader {
         let segment_ptr = segment.as_ptr();
         let segment_slice = unsafe { std::slice::from_raw_parts_mut(segment_ptr, len as usize) };
 
-        let file_slice: &[u8] = &raw[self.offset as usize..(self.offset + self.filesz) as usize];
+        let file_slice: &[u8] =
+            &raw[self.offset as usize..(self.offset.wrapping_add(self.filesz)) as usize];
+
+        // compute offset inside the mmaped slice where the segment should start
+        let offset = (self.vaddr - start) as usize;
 
         // copy the segment contents to the mmaped segment
-        segment_slice[..file_slice.len()].copy_from_slice(file_slice);
+        segment_slice[offset..offset + file_slice.len()].copy_from_slice(file_slice);
 
         // we need to zero the remaining bytes
         if self.memsz > self.filesz {
-            segment_slice[file_slice.len()..self.memsz as usize].fill(0);
+            segment_slice
+                [offset.wrapping_add(file_slice.len())..offset.wrapping_add(self.memsz as usize)]
+                .fill(0);
         }
 
         // record mapping in guest memory table, so CPU can translate guest vaddr to host pointer
@@ -111,7 +117,7 @@ impl Pheader {
             _ => self.align,
         };
         let start = self.vaddr & !(align - 1);
-        let end = (self.vaddr + self.memsz + align - 1) & !(align - 1);
+        let end = (self.vaddr.wrapping_add(self.memsz).wrapping_add(align) - 1) & !(align - 1);
         let len = end - start;
         (start, end, len)
     }

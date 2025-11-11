@@ -16,9 +16,9 @@ type SyscallHandlerFn = fn(&mut Cpu) -> i32;
 /// Usermode emulation
 pub struct Cpu<'cpu> {
     /// r0-r15 (r13=SP, r14=LR, r15=PC)
-    r: [u32; 16],
-    cpsr: u32,
-    mem: &'cpu mut mem::Mem,
+    pub r: [u32; 16],
+    pub cpsr: u32,
+    pub mem: &'cpu mut mem::Mem,
     syscall_handler: SyscallHandlerFn,
     /// only set by ArmSyscall::Exit, necessary to propagate exit code to the host
     pub status: Option<i32>,
@@ -29,17 +29,27 @@ impl<'cpu> Cpu<'cpu> {
         let syscall_handler: SyscallHandlerFn = if conf.log == Log::Syscalls {
             match conf.syscalls {
                 SyscallMode::Forward => |cpu| {
-                    stinkln!("[forward] syscall={:?}", ArmSyscall::try_from(cpu.r[7]));
-                    translation::syscall_forward(cpu)
+                    let r = translation::syscall_forward(cpu);
+                    stinkln!(
+                        "[syscall] {:?} ret={}",
+                        ArmSyscall::try_from(cpu.r[7]).unwrap(),
+                        r
+                    );
+                    r
                 },
                 SyscallMode::Sandbox => |cpu| {
-                    stinkln!("[sandbox] syscall={:?}", ArmSyscall::try_from(cpu.r[7]));
-                    sandbox::syscall_sandbox(cpu)
+                    let r = sandbox::syscall_sandbox(cpu);
+                    stinkln!(
+                        "[syscall] sandbox {:?} ret={}",
+                        ArmSyscall::try_from(cpu.r[7]).unwrap(),
+                        r
+                    );
+                    r
                 },
                 SyscallMode::Stub => |cpu| {
                     stinkln!(
-                        "[stubbing] syscall={:?}, returning -EACCES",
-                        ArmSyscall::try_from(cpu.r[7])
+                        "[syscall] stub {:?}, returning -EACCES",
+                        ArmSyscall::try_from(cpu.r[7]).unwrap()
                     );
                     sandbox::syscall_stub(cpu)
                 },
@@ -76,7 +86,7 @@ impl<'cpu> Cpu<'cpu> {
     /// moves pc forward a word
     #[inline(always)]
     fn advance(&mut self) {
-        self.r[15] += 4
+        self.r[15] = self.r[15].wrapping_add(4);
     }
 
     #[inline(always)]
@@ -93,7 +103,7 @@ impl<'cpu> Cpu<'cpu> {
     /// fetch-decode-execute step, will only return false on exit svc
     pub fn step(&mut self) -> Result<bool, err::Err> {
         let Some(word) = self.mem.read_u32(self.pc()) else {
-            // segfault of some kind, do more research before creating a
+            // TODO: segfault of some kind, do more research before creating a
             // err::Err::UnallowedMemoryAccess or something
             return Ok(false);
         };
@@ -103,7 +113,7 @@ impl<'cpu> Cpu<'cpu> {
             return Ok(false);
         }
 
-        let InstructionContainer { instruction, cond } = decoder::decode_word(word);
+        let InstructionContainer { instruction, cond } = decoder::decode_word(word, self.pc());
 
         // we dont execute this instruction, moving along
         if !self.cond_passes(cond) {
@@ -114,20 +124,29 @@ impl<'cpu> Cpu<'cpu> {
         match instruction {
             decoder::Instruction::MovImm { rd, rhs } => {
                 self.r[rd as usize] = rhs;
-                self.advance();
             }
             decoder::Instruction::Svc => {
                 self.r[0] = (self.syscall_handler)(self) as u32;
-                self.advance();
+            }
+            decoder::Instruction::LdrLiteral { rd, addr } => {
+                // buf is a guest ptr pointing to the guest pointer pointing to the literal we
+                // want, thus we read the u32 addr points to to get the addr to the literal
+                self.r[rd as usize] = self.mem.read_u32(addr).expect("Segfault");
             }
             decoder::Instruction::Unknown(w) => {
                 return Err(err::Err::UnknownOrUnsupportedInstruction(w));
             }
             i @ _ => {
-                stinkln!("skipping unimplemented instruction {:#x}:{:?}", word, i);
-                self.advance();
+                stinkln!(
+                    "found unimplemented instruction, exiting: {:#x}:={:?}",
+                    word,
+                    i
+                );
+                self.status = Some(1);
             }
         }
+
+        self.advance();
 
         Ok(true)
     }

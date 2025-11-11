@@ -27,8 +27,8 @@ impl Mem {
     pub fn translate(&self, guest_addr: u32) -> Option<*mut u8> {
         // Find the greatest key <= guest_addr.
         let (&base, seg) = self.maps.range(..=guest_addr).next_back()?;
-        if guest_addr < base + seg.len {
-            let offset = guest_addr - base;
+        if guest_addr < base.wrapping_add(seg.len) {
+            let offset = guest_addr.wrapping_sub(base);
             Some(unsafe { seg.host_ptr.add(offset as usize) })
         } else {
             None
@@ -41,7 +41,9 @@ impl Mem {
     }
 
     pub fn write_u32(&mut self, guest_addr: u32, value: u32) -> Result<(), &'static str> {
-        let ptr = self.translate(guest_addr).ok_or_else(|| "hola")?;
+        let ptr = self
+            .translate(guest_addr)
+            .ok_or_else(|| "Failed compute host addr to write to")?;
         unsafe { *(ptr as *mut u32) = value.to_le() }
         Ok(())
     }
