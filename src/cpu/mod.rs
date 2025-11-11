@@ -1,7 +1,7 @@
 use crate::{
     config::{self, Log, SyscallMode},
     cpu::{decoder::InstructionContainer, translation::ArmSyscall},
-    err, mem, stinkln,
+    err, mem, stinkln, sys,
 };
 
 /// decoding ARM instructions
@@ -11,7 +11,7 @@ mod sandbox;
 /// translating various things from arm to x86
 mod translation;
 
-type SyscallHandlerFn = fn(&mut Cpu) -> i32;
+type SyscallHandlerFn = fn(&mut Cpu, ArmSyscall) -> i32;
 
 /// Usermode emulation
 pub struct Cpu<'cpu> {
@@ -24,41 +24,38 @@ pub struct Cpu<'cpu> {
     pub status: Option<i32>,
 }
 
+fn print_i32_or_errno(r: i32) -> i32 {
+    if r < 0 {
+        println!("={:?}", sys::Errno::from(r));
+    } else {
+        println!("={}", r);
+    }
+
+    r
+}
+
 impl<'cpu> Cpu<'cpu> {
     pub fn new(conf: &'cpu config::Config, mem: &'cpu mut mem::Mem, pc: u32) -> Self {
-        let syscall_handler: SyscallHandlerFn = if conf.log == Log::Syscalls {
+        let syscall_handler: SyscallHandlerFn = if conf.log.contains(&Log::Syscalls) {
             match conf.syscalls {
-                SyscallMode::Forward => |cpu| {
-                    let r = translation::syscall_forward(cpu);
-                    stinkln!(
-                        "[syscall] {:?} ret={}",
-                        ArmSyscall::try_from(cpu.r[7]).unwrap(),
-                        r
-                    );
-                    r
+                SyscallMode::Forward => |cpu, syscall| {
+                    println!("{}", syscall.print(cpu));
+                    print_i32_or_errno(translation::syscall_forward(cpu, syscall))
                 },
-                SyscallMode::Sandbox => |cpu| {
-                    let r = sandbox::syscall_sandbox(cpu);
-                    stinkln!(
-                        "[syscall] sandbox {:?} ret={}",
-                        ArmSyscall::try_from(cpu.r[7]).unwrap(),
-                        r
-                    );
-                    r
+                SyscallMode::Sandbox => |cpu, syscall| {
+                    println!("{} [sandbox]", syscall.print(cpu));
+                    print_i32_or_errno(sandbox::syscall_sandbox(cpu, syscall))
                 },
-                SyscallMode::Stub => |cpu| {
-                    stinkln!(
-                        "[syscall] stub {:?}, returning -EACCES",
-                        ArmSyscall::try_from(cpu.r[7]).unwrap()
-                    );
-                    sandbox::syscall_stub(cpu)
+                SyscallMode::Deny => |cpu, syscall| {
+                    println!("{} [deny]", syscall.print(cpu));
+                    print_i32_or_errno(sandbox::syscall_stub(cpu, syscall))
                 },
             }
         } else {
             match conf.syscalls {
                 SyscallMode::Forward => translation::syscall_forward,
                 SyscallMode::Sandbox => sandbox::syscall_sandbox,
-                SyscallMode::Stub => sandbox::syscall_stub,
+                SyscallMode::Deny => sandbox::syscall_stub,
             }
         };
 
@@ -126,7 +123,7 @@ impl<'cpu> Cpu<'cpu> {
                 self.r[rd as usize] = rhs;
             }
             decoder::Instruction::Svc => {
-                self.r[0] = (self.syscall_handler)(self) as u32;
+                self.r[0] = (self.syscall_handler)(self, ArmSyscall::try_from(self.r[7])?) as u32;
             }
             decoder::Instruction::LdrLiteral { rd, addr } => {
                 // buf is a guest ptr pointing to the guest pointer pointing to the literal we

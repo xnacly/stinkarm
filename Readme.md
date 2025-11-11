@@ -1,6 +1,6 @@
 # Stinkarm
 
-> ARMv7 userspace binary emulator for x86 linux system
+> ARMv7 userspace binary emulator for x86 linux system supporting syscall sandboxing and other configurations
 
 ## Usage
 
@@ -19,7 +19,7 @@ Options:
 
           Possible values:
           - forward: Forward syscalls to the host system (via ARMv7->x86 translation layer)
-          - stub:    Stub syscalls: return success on all invocations
+          - deny:    Deny syscalls: return -ENOSYS on all invocations
           - sandbox: Sandbox: only allow a safe subset: no file IO (except fd 0,1,2), no network, no process spawns
 
           [default: sandbox]
@@ -35,8 +35,10 @@ Options:
   -l, --log <LOG>
           Configure what data to log
 
-          [default: none]
           [possible values: none, elf, syscalls, memory]
+
+  -v, --verbose
+          Log everything and anything
 
   -h, --help
           Print help (see a summary with '-h')
@@ -49,14 +51,18 @@ Options:
 ### Example
 
 ```text
-$ nix develop # enter build env
-$ # builds examples to elf binaries in examples/
-$ cargo run -- -lelf --syscalls=stub examples/asm.elf
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
-     Running `target/debug/stinkarm -lelf -Cstub examples/asm.elf`
-[     0.302ms] opening binary "examples/asm.elf"
-[     0.330ms] parsing ELF...
-[     0.339ms] \
+# enter build env with nix or have 'arm-none-eabi-as', 'arm-none-eabi-ld' and 'arm-none-eabi-gcc'
+$ nix develop
+$ cargo run --bin bld_exmpl # builds examples to elf binaries in examples/
+$ cargo run -- -lsyscalls --syscalls=deny examples/helloWorld.elf
+46691 write(fd=1, buf=0x8024, len=14) [deny]
+=ENOSYS
+46691 exit(code=0) [deny]
+=ENOSYS
+$ cargo run -- -v --syscalls=sandbox examples/helloWorld.elf
+[     0.438ms] opening binary "examples/helloWorld.elf"
+[     0.496ms] parsing ELF...
+[     0.511ms] \
 ELF Header:
   Magic:              [7f, 45, 4c, 46]
   Class:              ELF32
@@ -66,26 +72,26 @@ ELF Header:
   Version:            1
   Entry point:        0x8000
   Program hdr offset: 52 (32 bytes each)
-  Section hdr offset: 4572
+  Section hdr offset: 4696
   Flags:              0x05000200
   EH size:            52
   # Program headers:  1
-  # Section headers:  8
-  Str tbl index:      7
+  # Section headers:  9
+  Str tbl index:      8
 
 Program Headers:
   Type       Offset   VirtAddr   PhysAddr   FileSz    MemSz  Flags  Align
-  LOAD     0x001000 0x00008000 0x00008000 0x00000c 0x00000c    R|X 0x1000
+  LOAD     0x001000 0x00008000 0x00008000 0x000033 0x000033    R|X 0x1000
 
-[     0.371ms] mapped program header `LOAD` of 12B (G=0x8000 -> H=0x7ffff7f87000)
-[     0.378ms] jumping to entry G=0x8000:H=0x7ffff7f87000, starting cpu
-[     0.383ms] got exit code `161`, forwarding to host
-$ cargo run -- -lsyscalls -Cstub examples/asm.elf
-[     0.291ms] opening binary "examples/asm.elf"
-[     0.322ms] parsing ELF...
-[     0.344ms] jumping to entry G=0x8000:H=0x7ffff7f87000, starting cpu
-[     0.360ms] [stubbing] syscall=Ok(Exit), returning -EACCES
-[     0.364ms] got exit code `161`, forwarding to host
+[     0.571ms] mapped program header `LOAD` of 51B (G=0x8000 -> H=0x7ffff7f87000)
+[     0.591ms] jumping to entry G=0x8000 at H=0x7ffff7f87000
+[     0.600ms] starting the emulator
+47164 write(fd=1, buf=0x8024, len=14) [sandbox]
+Hello, world!
+=14
+47164 exit(code=0) [sandbox]
+=0
+[     0.658ms] exiting with `0`
 ```
 
 ## Features

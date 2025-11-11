@@ -13,6 +13,27 @@ pub enum ArmSyscall {
     close = 0x06,
 }
 
+impl ArmSyscall {
+    // TODO: rework this with some kind of writer
+    pub fn print(&self, cpu: &super::Cpu) -> String {
+        let mut buf = String::with_capacity(32);
+        buf.push_str(&format!("{} {:?}(", std::process::id(), self));
+        let args = match self {
+            ArmSyscall::exit => format!("code={}", cpu.r[0]),
+            ArmSyscall::fork => todo!(),
+            ArmSyscall::read => todo!(),
+            ArmSyscall::write => format!("fd={}, buf={:#x}, len={}", cpu.r[0], cpu.r[1], cpu.r[2]),
+            ArmSyscall::open => todo!(),
+            ArmSyscall::close => todo!(),
+            _ => "unimplemented".into(),
+        };
+        buf.push_str(&args);
+        buf.push(')');
+        buf.shrink_to_fit();
+        buf
+    }
+}
+
 impl TryFrom<u32> for ArmSyscall {
     type Error = err::Err;
 
@@ -30,8 +51,8 @@ impl TryFrom<u32> for ArmSyscall {
     }
 }
 
-pub fn syscall_forward(cpu: &mut super::Cpu) -> i32 {
-    match ArmSyscall::try_from(cpu.r[7]).expect("Unregistered syscall") {
+pub fn syscall_forward(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
+    match syscall {
         // we catch exit fully, since we need to do cleanup after the program is done
         ArmSyscall::exit => {
             cpu.status = Some(cpu.r[0] as i32);

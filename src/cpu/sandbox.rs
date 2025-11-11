@@ -1,7 +1,7 @@
 use crate::{cpu::translation::ArmSyscall, sys};
 
-pub fn syscall_sandbox(cpu: &mut super::Cpu) -> i32 {
-    match ArmSyscall::try_from(cpu.r[7]).expect("Unregistered syscall") {
+pub fn syscall_sandbox(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
+    match syscall {
         // we catch exit fully, since we need to do cleanup after the program is done
         ArmSyscall::exit => {
             cpu.status = Some(cpu.r[0] as i32);
@@ -20,8 +20,8 @@ pub fn syscall_sandbox(cpu: &mut super::Cpu) -> i32 {
     }
 }
 
-pub fn syscall_stub(cpu: &mut super::Cpu) -> i32 {
-    match ArmSyscall::try_from(cpu.r[7]).expect("Unregistered syscall") {
+pub fn syscall_stub(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
+    match syscall {
         // we catch exit fully, since we need to do cleanup after the program is done
         ArmSyscall::exit => cpu.status = Some(cpu.r[0] as i32),
         _ => (),

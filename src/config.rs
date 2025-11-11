@@ -5,8 +5,8 @@ use std::path::PathBuf;
 pub enum SyscallMode {
     /// Forward syscalls to the host system (via ARMv7->x86 translation layer)
     Forward,
-    /// Stub syscalls: return success on all invocations
-    Stub,
+    /// Deny syscalls: return -ENOSYS on all invocations
+    Deny,
     /// Sandbox: only allow a safe subset: no file IO (except fd 0,1,2), no network, no process spawns
     Sandbox,
 }
@@ -42,6 +42,10 @@ pub struct Config {
     pub no_env: bool,
 
     /// Configure what data to log
-    #[arg(short, long, value_enum, default_value_t = Log::None)]
-    pub log: Log,
+    #[arg(short, long)]
+    pub log: Vec<Log>,
+
+    /// Log everything and anything
+    #[arg(short = 'v', long)]
+    pub verbose: bool,
 }

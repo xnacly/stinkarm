@@ -2,6 +2,8 @@
 use clap::Parser;
 use std::{fs::File, io::Read, process::exit};
 
+use crate::config::Log;
+
 /// configure stinkarm via cli
 pub mod config;
 /// emulating the processor
@@ -18,19 +20,25 @@ pub mod util;
 
 fn main() {
     util::init_timer();
-    let conf = config::Config::parse();
+    let mut conf = config::Config::parse();
 
     let path = &conf.target;
-    stinkln!("opening binary {:?}", path);
+    if conf.verbose {
+        stinkln!("opening binary {:?}", path);
+        conf.log
+            .extend_from_slice(&[Log::Elf, Log::Syscalls, Log::Memory]);
+    }
     let mut file = File::open(path).expect("Failed to open binary");
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)
         .expect("Failed to dump file into memory");
 
-    stinkln!("parsing ELF...");
+    if conf.verbose {
+        stinkln!("parsing ELF...");
+    }
     let elf: elf::Elf = (&buf as &[u8]).try_into().expect("Failed to parse binary");
 
-    if conf.log == config::Log::Elf {
+    if conf.log.contains(&config::Log::Elf) {
         stinkln!("\\\n{}", elf);
     }
 
@@ -41,7 +49,7 @@ fn main() {
             phdr.map(&buf, &mut mem)
                 .expect("Mapping program header failed");
 
-            if conf.log == config::Log::Elf {
+            if conf.log.contains(&config::Log::Elf) {
                 stinkln!(
                     "mapped program header `{:?}` of {}B (G={:#X} -> H={:?})",
                     phdr.r#type,
@@ -57,13 +65,18 @@ fn main() {
         .translate(elf.header.entry)
         .unwrap_or(std::ptr::null_mut());
 
-    stinkln!(
-        "jumping to entry G={:#X}:H={:?}, starting cpu",
-        elf.header.entry,
-        entry
-    );
+    if conf.verbose {
+        stinkln!(
+            "jumping to entry G={:#X} at H={:?}",
+            elf.header.entry,
+            entry
+        );
+    }
 
     let mut cpu = cpu::Cpu::new(&conf, &mut mem, elf.header.entry);
+    if conf.verbose {
+        stinkln!("starting the emulator");
+    }
     loop {
         match cpu.step() {
             // EOI - end of instructions :^)
@@ -82,5 +95,8 @@ fn main() {
 
     let status = cpu.status.unwrap_or_else(|| 0);
     mem.destroy();
+    if conf.verbose {
+        stinkln!("exiting with `{}`", status);
+    }
     exit(status);
 }
