@@ -24,6 +24,18 @@ impl Mem {
     }
 
     /// translate a guest addr to a host addr we can write and read from
+    ///
+    /// ```text
+    /// +--guest--+
+    /// | 0x80000 | ------------+
+    /// +---------+             |
+    ///                         |
+    ///                     Mem::translate
+    ///                         |
+    /// +------host------+      |
+    /// | 0x7f5b4b8f8000 | <----+
+    /// +----------------+
+    /// ```
     pub fn translate(&self, guest_addr: u32) -> Option<*mut u8> {
         // Find the greatest key <= guest_addr.
         let (&base, seg) = self.maps.range(..=guest_addr).next_back()?;

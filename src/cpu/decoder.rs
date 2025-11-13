@@ -10,8 +10,8 @@ pub enum Instruction {
     // target_offset is signed byte-offset already shifted (<<2)
     Branch { link: bool, target_offset: i32 },
     Svc,
-    Unknown(u32),
     LdrLiteral { rd: u8, addr: u32 },
+    Unknown(u32),
 }
 
 /// The 4‑bit primary opcode field (bits 24‑21) for dpi instructions, nonexhaustive list
