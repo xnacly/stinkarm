@@ -14,12 +14,14 @@ pub fn write(cpu: &mut cpu::Cpu, fd: u32, buf: u32, len: u32) -> i32 {
     unsafe {
         core::arch::asm!(
             "syscall",
-            in("rax") 1,
-            in("rdi") fd,
-            in("rsi") buf_ptr,
-            in("rdx") len,
+            in("rax") 1_u64,
+            in("rdi") fd as u64,
+            in("rsi") buf_ptr as u64,
+            in("rdx") len as u64,
             lateout("rax") ret,
-            options(nostack, preserves_flags)
+            out("rcx") _,
+            out("r11") _,
+            options(nostack),
         );
     }
 
