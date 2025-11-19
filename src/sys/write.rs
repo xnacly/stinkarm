@@ -10,7 +10,7 @@ pub fn write(cpu: &mut cpu::Cpu, fd: u32, buf: u32, len: u32) -> i32 {
         return -(sys::Errno::EFAULT as i32);
     };
 
-    let ret: i32;
+    let ret: i64;
     unsafe {
         core::arch::asm!(
             "syscall",
@@ -23,5 +23,5 @@ pub fn write(cpu: &mut cpu::Cpu, fd: u32, buf: u32, len: u32) -> i32 {
         );
     }
 
-    ret
+    ret as i32
 }
