@@ -25,5 +25,5 @@ pub fn write(cpu: &mut cpu::Cpu, fd: u32, buf: u32, len: u32) -> i32 {
         );
     }
 
-    ret as i32
+    ret.try_into().unwrap_or(i32::MAX)
 }
