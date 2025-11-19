@@ -93,7 +93,7 @@ fn main() {
         }
     }
 
-    let status = cpu.status.unwrap_or_else(|| 0);
+    let status = cpu.status.unwrap_or(0);
     mem.destroy();
     if conf.verbose {
         stinkln!("exiting with `{}`", status);

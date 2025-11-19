@@ -16,19 +16,18 @@ pub fn syscall_sandbox(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
 
             sys::write(cpu, r0, r1, r2)
         }
-        c @ _ => todo!("{:?}", c),
+        c => todo!("{:?}", c),
     }
 }
 
 pub fn syscall_deny(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
-    match syscall {
-        // we catch exit fully, since we need to do cleanup after the program is done
-        ArmSyscall::exit => cpu.status = Some(cpu.r[0] as i32),
-        _ => (),
-    }
+    // we catch exit fully, since we need to do cleanup after the program is done
+    if let ArmSyscall::exit = syscall {
+        cpu.status = Some(cpu.r[0] as i32)
+    };
 
     // TODO: big big thinking moment here, should we allow write? Otherwise logs will just not
     // logged
 
-    return -(sys::Errno::ENOSYS as i32);
+    -(sys::Errno::ENOSYS as i32)
 }

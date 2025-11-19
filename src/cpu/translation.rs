@@ -59,6 +59,6 @@ pub fn syscall_forward(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
             0
         }
         ArmSyscall::write => sys::write(cpu, cpu.r[0], cpu.r[1], cpu.r[2]),
-        c @ _ => todo!("{:?}", c),
+        c => todo!("{:?}", c),
     }
 }

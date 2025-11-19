@@ -165,7 +165,7 @@ pub fn mprotect(addr: std::ptr::NonNull<u8>, len: usize, prot: MmapProt) -> Resu
     if ret < 0 {
         return Err(format!(
             "mprotect failed: {}",
-            std::io::Error::from_raw_os_error(-ret as i32).to_string()
+            std::io::Error::from_raw_os_error(-ret as i32)
         ));
     }
 

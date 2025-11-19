@@ -11,6 +11,12 @@ pub struct Mem {
     maps: BTreeMap<u32, MappedSegment>,
 }
 
+impl Default for Mem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Mem {
     pub fn new() -> Self {
         Self {
@@ -55,7 +61,7 @@ impl Mem {
     pub fn write_u32(&mut self, guest_addr: u32, value: u32) -> Result<(), &'static str> {
         let ptr = self
             .translate(guest_addr)
-            .ok_or_else(|| "Failed compute host addr to write to")?;
+            .ok_or("Failed compute host addr to write to")?;
         unsafe { *(ptr as *mut u32) = value.to_le() }
         Ok(())
     }
@@ -64,14 +70,13 @@ impl Mem {
     /// after dropping
     pub fn destroy(self) {
         for (guest_addr, seg) in self.maps {
-            if let Some(nnptr) = std::ptr::NonNull::new(seg.host_ptr) {
-                if let Err(e) = mmap::munmap(nnptr, seg.len as usize) {
+            if let Some(nnptr) = std::ptr::NonNull::new(seg.host_ptr)
+                && let Err(e) = mmap::munmap(nnptr, seg.len as usize) {
                     eprintln!(
                         "Warning: failed to munmap guest segment @ {:#010x} (len={}): {:?}",
                         guest_addr, seg.len, e
                     );
                 }
-            }
         }
     }
 }

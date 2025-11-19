@@ -69,7 +69,7 @@ fn decode_rotated_imm(imm12: u32) -> u32 {
     // constant and the remaining 4 bits as a rotate count, the 8 bit value is rotated and the
     // result is taken as a u32
     let rotate = ((imm12 >> 8) & 0b1111) * 2;
-    ((imm12 & 0xff) as u32).rotate_right(rotate)
+    (imm12 & 0xff).rotate_right(rotate)
 }
 
 /// process bits defined in word and construct the equivalent Instruction
@@ -94,7 +94,7 @@ pub fn decode_word(word: u32, caddr: u32) -> InstructionContainer {
         let rn = ((word >> 16) & 0xF) as u8;
         // destination for load or store
         let rd = ((word >> 12) & 0xF) as u8;
-        let imm12 = (word & 0xFFF) as u32;
+        let imm12 = word & 0xFFF;
 
         // Literal‑pool version
         if l && rn == 0b1111 && p && u && !w && !b {

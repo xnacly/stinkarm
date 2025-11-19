@@ -133,7 +133,7 @@ impl<'cpu> Cpu<'cpu> {
             decoder::Instruction::Unknown(w) => {
                 return Err(err::Err::UnknownOrUnsupportedInstruction(w));
             }
-            i @ _ => {
+            i => {
                 stinkln!(
                     "found unimplemented instruction, exiting: {:#x}:={:?}",
                     word,
