@@ -48,14 +48,14 @@ impl<'cpu> Cpu<'cpu> {
                 },
                 SyscallMode::Deny => |cpu, syscall| {
                     println!("{} [deny]", syscall.print(cpu));
-                    print_i32_or_errno(sandbox::syscall_stub(cpu, syscall))
+                    print_i32_or_errno(sandbox::syscall_deny(cpu, syscall))
                 },
             }
         } else {
             match conf.syscalls {
                 SyscallMode::Forward => translation::syscall_forward,
                 SyscallMode::Sandbox => sandbox::syscall_sandbox,
-                SyscallMode::Deny => sandbox::syscall_stub,
+                SyscallMode::Deny => sandbox::syscall_deny,
             }
         };
 
@@ -125,9 +125,9 @@ impl<'cpu> Cpu<'cpu> {
             decoder::Instruction::Svc => {
                 self.r[0] = (self.syscall_handler)(self, ArmSyscall::try_from(self.r[7])?) as u32;
             }
+            // addr is a guest ptr pointing to the guest pointer pointing to the literal we
+            // want, thus we read the u32 addr points to get the addr to the literal
             decoder::Instruction::LdrLiteral { rd, addr } => {
-                // buf is a guest ptr pointing to the guest pointer pointing to the literal we
-                // want, thus we read the u32 addr points to to get the addr to the literal
                 self.r[rd as usize] = self.mem.read_u32(addr).expect("Segfault");
             }
             decoder::Instruction::Unknown(w) => {
