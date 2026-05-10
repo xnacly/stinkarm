@@ -7,10 +7,10 @@ use std::{
     process::{Command, ExitCode},
 };
 
-/// Build, link, and execute an ARM assembly file with stinkarm
+/// Build, link, and execute an ARM assembly or C file with stinkarm
 #[derive(Parser)]
 struct Args {
-    /// ARM assembly file to run
+    /// ARM assembly or C file to run
     input: PathBuf,
 
     /// Guest address used as the linker text address
@@ -18,8 +18,12 @@ struct Args {
     text_addr: u32,
 
     /// Directory for generated object and ELF files
-    #[arg(long, default_value = "target/run_asm")]
+    #[arg(long, default_value = "target/srun")]
     out_dir: PathBuf,
+
+    /// Print the linked ARM disassembly before running the emulator
+    #[arg(long)]
+    dump_asm: bool,
 
     /// Extra arguments passed to stinkarm before the generated ELF path
     #[arg(last = true)]
@@ -30,7 +34,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(code) => ExitCode::from(code),
         Err(e) => {
-            eprintln!("run_asm: {e}");
+            eprintln!("srun: {e}");
             ExitCode::FAILURE
         }
     }
@@ -47,8 +51,32 @@ fn run() -> Result<u8, Box<dyn std::error::Error>> {
         .ok_or("input path has no valid file stem")?;
     let elf = args.out_dir.join(format!("{stem}.elf"));
 
-    asm::build_asm(&input, &elf, args.text_addr)?;
+    asm::build_source(&input, &elf, args.text_addr)?;
+    if args.dump_asm {
+        dump_asm(&elf)?;
+    }
+
     execute(&elf, &args.emulator_args)
+}
+
+fn dump_asm(elf: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new("arm-none-eabi-objdump")
+        .arg("-d")
+        .arg(elf)
+        .output()?;
+
+    if !output.status.success() {
+        return Err(std::io::Error::other(format!(
+            "objdump failed with status {:?}\nstdout:\n{}\nstderr:\n{}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ))
+        .into());
+    }
+
+    print!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
 }
 
 fn execute(elf: &Path, emulator_args: &[String]) -> Result<u8, Box<dyn std::error::Error>> {

@@ -56,46 +56,13 @@ Options:
 ```text
 # enter build env with nix or have 'arm-none-eabi-as', 'arm-none-eabi-ld' and 'arm-none-eabi-gcc'
 $ nix develop
-$ cargo run --bin bld_exmpl # builds examples to elf binaries in examples/
-$ cargo run --bin run_asm -- tests/valid_write_exit.s # builds, links and runs one asm file
-$ cargo run -- -lsyscalls --syscalls=deny examples/helloWorld.elf
-46691 write(fd=1, buf=0x8024, len=14) [deny]
-=ENOSYS
-46691 exit(code=0) [deny]
-=ENOSYS
-$ cargo run -- -v --syscalls=sandbox examples/helloWorld.elf
-[     0.438ms] opening binary "examples/helloWorld.elf"
-[     0.496ms] parsing ELF...
-[     0.511ms] \
-ELF Header:
-  Magic:              [7f, 45, 4c, 46]
-  Class:              ELF32
-  Data:               Little endian
-  Type:               Executable
-  Machine:            EM_ARM
-  Version:            1
-  Entry point:        0x8000
-  Program hdr offset: 52 (32 bytes each)
-  Section hdr offset: 4696
-  Flags:              0x05000200
-  EH size:            52
-  # Program headers:  1
-  # Section headers:  9
-  Str tbl index:      8
-
-Program Headers:
-  Type       Offset   VirtAddr   PhysAddr   FileSz    MemSz  Flags  Align
-  LOAD     0x001000 0x00008000 0x00008000 0x000033 0x000033    R|X 0x1000
-
-[     0.571ms] mapped program header `LOAD` of 51B (G=0x8000 -> H=0x7ffff7f87000)
-[     0.591ms] jumping to entry G=0x8000 at H=0x7ffff7f87000
-[     0.600ms] starting the emulator
-47164 write(fd=1, buf=0x8024, len=14) [sandbox]
-Hello, world!
-=14
-47164 exit(code=0) [sandbox]
+$ cargo run --bin srun -- tests/valid_write_exit.s --dump-asm
+$ cargo run --bin srun -- tests/valid_write_exit.s -- --log syscalls
+70088 write(fd=1, buf=0x8024, len=3) [sandbox]
+ok
+=3
+70088 exit(code=7) [sandbox]
 =0
-[     0.658ms] exiting with `0`
 ```
 
 ## Features
