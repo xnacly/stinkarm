@@ -5,7 +5,7 @@ pub fn write(cpu: &mut cpu::Cpu, fd: u32, buf: u32, len: u32) -> i32 {
         return 0;
     }
 
-    let Some(buf_ptr) = cpu.mem.translate(buf) else {
+    let Some(buf_ptr) = cpu.mem.translate_range(buf, len as usize) else {
         // segfault :O
         return -(sys::Errno::EFAULT as i32);
     };

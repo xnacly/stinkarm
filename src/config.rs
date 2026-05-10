@@ -37,6 +37,10 @@ pub struct Config {
     #[arg(short, long, default_value_t = 1024 * 1024)]
     pub stack_size: usize,
 
+    /// Allow out-of-bounds guest memory accesses to hit host memory
+    #[arg(long)]
+    pub allow_host_memory_corruption: bool,
+
     /// Don't pass host env to emulated process
     #[arg(short, long)]
     pub no_env: bool,

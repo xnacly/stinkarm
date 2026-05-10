@@ -57,16 +57,12 @@ impl MmapFlags {
     pub const PRIVATE: MmapFlags = MmapFlags(0x0002);
     /// map addr must be exactly as requested
     pub const FIXED: MmapFlags = MmapFlags(0x0010);
-
-    // MAP_FIXED_NOREPLACE (Linux ≥ 5.4)
+    /// MAP_FIXED_NOREPLACE
     pub const NOREPLACE: MmapFlags = MmapFlags(0x100000);
-
     /// allocated from memory, swap space
     pub const ANONYMOUS: MmapFlags = MmapFlags(0x20);
-
     /// mapping is used for stack
     pub const STACK: MmapFlags = MmapFlags(0x4000);
-
     /// omit from dumps
     pub const CONCEAL: MmapFlags = MmapFlags(0x8000);
 

@@ -29,6 +29,9 @@ Options:
 
           [default: 1048576]
 
+      --allow-host-memory-corruption
+          Allow out-of-bounds guest memory accesses to hit host memory
+
   -n, --no-env
           Don't pass host env to emulated process
 

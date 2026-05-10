@@ -42,7 +42,7 @@ fn main() {
         stinkln!("\\\n{}", elf);
     }
 
-    let mut mem = mem::Mem::new();
+    let mut mem = mem::Mem::with_bounds_checks(!conf.allow_host_memory_corruption);
 
     for phdr in elf.pheaders {
         if phdr.r#type == elf::pheader::Type::LOAD {
@@ -94,7 +94,6 @@ fn main() {
     }
 
     let status = cpu.status.unwrap_or(0);
-    mem.destroy();
     if conf.verbose {
         stinkln!("exiting with `{}`", status);
     }

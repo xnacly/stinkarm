@@ -1,4 +1,3 @@
-use crate::mem::mmap::{MmapFlags, MmapProt};
 use crate::{le32, mem};
 
 /// Phdr, equivalent to Elf32_Phdr, see: https://gabi.xinuos.com/elf/07-pheader.html
@@ -56,70 +55,65 @@ impl Pheader {
         })
     }
 
-    /// mapping applys the configuration of self to the current memory context by creating the
-    /// segments with the corresponding permission bits, vaddr, etc
+    /// Copy this loadable segment into guest memory.
     pub fn map(&self, raw: &[u8], guest_mem: &mut mem::Mem) -> Result<(), String> {
-        // zero memory needed case, no clue if this actually ever happens, but we support it
         if self.memsz == 0 {
             return Ok(());
         }
 
+        self.validate_loadable()?;
+
+        let file_slice = raw
+            .get(self.file_range()?)
+            .ok_or("program header file range is out of bounds")?;
+
+        guest_mem.map_region(self.vaddr, file_slice)?;
+
+        if self.memsz > self.filesz {
+            let bss_addr = self.bss_addr()?;
+            let bss_len = self.bss_len();
+            guest_mem.zero_region(bss_addr, bss_len)?;
+        }
+
+        Ok(())
+    }
+
+    fn validate_loadable(&self) -> Result<(), String> {
         if self.vaddr == 0 {
             return Err("program header has a zero virtual address".into());
         }
 
-        // we need page alignement, so either Elf32_Phdr.p_align or 4096
-        let (start, _end, len) = self.alignments();
-
-        // Instead of mapping at the guest vaddr (Linux doesnt't allow for low addresses),
-        // we allocate memory wherever the host kernel gives us.
-        // This keeps guest memory sandboxed: guest addr != host addr.
-        let segment = mem::mmap::mmap(
-            None,
-            len as usize,
-            MmapProt::WRITE,
-            MmapFlags::ANONYMOUS | MmapFlags::PRIVATE,
-            -1,
-            0,
-        )?;
-
-        let segment_ptr = segment.as_ptr();
-        let segment_slice = unsafe { std::slice::from_raw_parts_mut(segment_ptr, len as usize) };
-
-        let file_slice: &[u8] =
-            &raw[self.offset as usize..(self.offset.wrapping_add(self.filesz)) as usize];
-
-        // compute offset inside the mmaped slice where the segment should start
-        let offset = (self.vaddr - start) as usize;
-
-        // copy the segment contents to the mmaped segment
-        segment_slice[offset..offset + file_slice.len()].copy_from_slice(file_slice);
-
-        // we need to zero the remaining bytes
-        if self.memsz > self.filesz {
-            segment_slice
-                [offset.wrapping_add(file_slice.len())..offset.wrapping_add(self.memsz as usize)]
-                .fill(0);
+        if self.filesz > self.memsz {
+            return Err("program header file size is larger than memory size".into());
         }
 
-        // record mapping in guest memory table, so CPU can translate guest vaddr to host pointer
-        guest_mem.map_region(self.vaddr, len, segment_ptr);
+        if self.align > 1 && self.vaddr % self.align != self.offset % self.align {
+            return Err("program header virtual address and file offset are not aligned".into());
+        }
 
-        // we change the permissions for our segment from W to the segments requested bits
-        mem::mmap::mprotect(segment, len as usize, self.flags.into())
+        self.vaddr
+            .checked_add(self.memsz)
+            .ok_or("program header guest memory range overflows")?;
+
+        Ok(())
     }
 
-    /// returns (start, end, len)
-    fn alignments(&self) -> (u32, u32, u32) {
-        // we need page alignement, so either Elf32_Phdr.p_align or 4096
-        let align = match self.align {
-            0 => 0x1000,
-            _ => self.align,
-        };
-        let start = self.vaddr & !(align - 1);
-        let end = (self.vaddr.wrapping_add(self.memsz).wrapping_add(align) - 1) & !(align - 1);
-        let len = end - start;
-        (start, end, len)
+    fn file_range(&self) -> Result<std::ops::Range<usize>, String> {
+        let start = self.offset as usize;
+        let end = start
+            .checked_add(self.filesz as usize)
+            .ok_or("program header file range overflows")?;
+        Ok(start..end)
+    }
+
+    fn bss_addr(&self) -> Result<u32, String> {
+        self.vaddr
+            .checked_add(self.filesz)
+            .ok_or_else(|| "program header bss address overflows".into())
+    }
+
+    fn bss_len(&self) -> usize {
+        (self.memsz - self.filesz) as usize
     }
 }
 
@@ -230,6 +224,8 @@ impl std::ops::BitOr for Flags {
 
 #[cfg(test)]
 mod tests {
+    use crate::mem;
+
     use crate::elf::pheader::{Flags, Pheader, Type};
 
     fn valid_phdr_bytes() -> [u8; 32] {
@@ -320,5 +316,117 @@ mod tests {
     fn test_flags_bitor() {
         let combined = Flags::R | Flags::W;
         assert_eq!(combined.bits(), Flags::R.bits() | Flags::W.bits());
+    }
+
+    #[test]
+    fn test_map_loads_file_bytes_at_guest_vaddr_and_zeros_bss() {
+        let mut raw = vec![0u8; 0x1100];
+        raw[0x1000..0x1004].copy_from_slice(&[1, 2, 3, 4]);
+
+        let phdr = Pheader {
+            r#type: Type::LOAD,
+            offset: 0x1000,
+            vaddr: 0x2000,
+            paddr: 0x2000,
+            filesz: 4,
+            memsz: 8,
+            flags: Flags::R,
+            align: 0x1000,
+        };
+        let mut guest_mem = mem::Mem::with_size(0x3000);
+        guest_mem
+            .write_u32(0x2004, 0xffff_ffff)
+            .expect("pre-fill bss area");
+
+        phdr.map(&raw, &mut guest_mem)
+            .expect("program header should map");
+
+        assert_eq!(guest_mem.read_u32(0x2000), Some(0x0403_0201));
+        assert_eq!(guest_mem.read_u32(0x2004), Some(0));
+    }
+
+    #[test]
+    fn test_map_rejects_file_size_larger_than_memory_size() {
+        let phdr = Pheader {
+            r#type: Type::LOAD,
+            offset: 0,
+            vaddr: 0x1000,
+            paddr: 0x1000,
+            filesz: 8,
+            memsz: 4,
+            flags: Flags::R,
+            align: 0x1000,
+        };
+        let mut guest_mem = mem::Mem::with_size(0x3000);
+
+        assert!(phdr.map(&[0; 8], &mut guest_mem).is_err());
+    }
+
+    #[test]
+    fn test_map_rejects_out_of_bounds_guest_region() {
+        let phdr = Pheader {
+            r#type: Type::LOAD,
+            offset: 0,
+            vaddr: 0x2ffe,
+            paddr: 0x2ffe,
+            filesz: 4,
+            memsz: 4,
+            flags: Flags::R,
+            align: 0x1000,
+        };
+        let mut guest_mem = mem::Mem::with_size(0x3000);
+
+        assert!(phdr.map(&[1, 2, 3, 4], &mut guest_mem).is_err());
+    }
+
+    #[test]
+    fn test_map_rejects_misaligned_file_offset_and_guest_vaddr() {
+        let phdr = Pheader {
+            r#type: Type::LOAD,
+            offset: 0x1000,
+            vaddr: 0x2004,
+            paddr: 0x2004,
+            filesz: 4,
+            memsz: 4,
+            flags: Flags::R,
+            align: 0x1000,
+        };
+        let mut guest_mem = mem::Mem::with_size(0x3000);
+
+        assert!(phdr.map(&[0; 0x1004], &mut guest_mem).is_err());
+    }
+
+    #[test]
+    fn test_map_rejects_guest_range_overflow() {
+        let phdr = Pheader {
+            r#type: Type::LOAD,
+            offset: 0,
+            vaddr: u32::MAX - 1,
+            paddr: u32::MAX - 1,
+            filesz: 2,
+            memsz: 4,
+            flags: Flags::R,
+            align: 1,
+        };
+        let mut guest_mem = mem::Mem::with_size(0x3000);
+
+        assert!(phdr.map(&[1, 2], &mut guest_mem).is_err());
+    }
+
+    #[test]
+    fn test_map_rejects_out_of_bounds_file_range() {
+        let phdr = Pheader {
+            r#type: Type::LOAD,
+            offset: 4,
+            vaddr: 0x1000,
+            paddr: 0x1000,
+            filesz: 4,
+            memsz: 4,
+            flags: Flags::R,
+            align: 1,
+        };
+        let mut guest_mem = mem::Mem::with_size(0x3000);
+
+        assert!(phdr.map(&[1, 2, 3, 4, 5, 6], &mut guest_mem).is_err());
     }
 }
