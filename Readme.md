@@ -57,6 +57,7 @@ Options:
 # enter build env with nix or have 'arm-none-eabi-as', 'arm-none-eabi-ld' and 'arm-none-eabi-gcc'
 $ nix develop
 $ cargo run --bin bld_exmpl # builds examples to elf binaries in examples/
+$ cargo run --bin run_asm -- tests/valid_write_exit.s # builds, links and runs one asm file
 $ cargo run -- -lsyscalls --syscalls=deny examples/helloWorld.elf
 46691 write(fd=1, buf=0x8024, len=14) [deny]
 =ENOSYS

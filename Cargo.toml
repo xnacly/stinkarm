@@ -14,3 +14,7 @@ path = "src/main.rs"
 [[bin]]
 name = "bld_exmpl"
 path = "tools/bld_exmpl.rs"
+
+[[bin]]
+name = "run_asm"
+path = "tools/run_asm.rs"
