@@ -13,4 +13,4 @@ path = "src/main.rs"
 
 [[bin]]
 name = "srun"
-path = "tools/run_asm.rs"
+path = "tools/srun.rs"
