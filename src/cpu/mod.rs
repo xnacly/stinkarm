@@ -1,6 +1,9 @@
 use crate::{
     config::{self, Log, SyscallMode},
-    cpu::{decoder::InstructionContainer, translation::ArmSyscall},
+    cpu::{
+        decoder::{Decoded, InstructionKind},
+        translation::ArmSyscall,
+    },
     err, mem, stinkln, sys,
 };
 
@@ -110,7 +113,7 @@ impl<'cpu> Cpu<'cpu> {
             return Ok(false);
         }
 
-        let InstructionContainer { instruction, cond } = decoder::decode_word(word, self.pc());
+        let Decoded { kind, cond, raw } = decoder::decode_word(word);
 
         // we dont execute this instruction, moving along
         if !self.cond_passes(cond) {
@@ -118,20 +121,23 @@ impl<'cpu> Cpu<'cpu> {
             return Ok(true);
         }
 
-        match instruction {
-            decoder::Instruction::MovImm { rd, rhs } => {
-                self.r[rd as usize] = rhs;
+        match kind {
+            InstructionKind::MovImm => {
+                let rd = decoder::bits(raw, 15, 12) as usize;
+                let imm12 = decoder::bits(raw, 11, 0);
+                self.r[rd] = decoder::decode_rotated_imm(imm12);
             }
-            decoder::Instruction::Svc => {
+            InstructionKind::Svc => {
                 self.r[0] = (self.syscall_handler)(self, ArmSyscall::try_from(self.r[7])?) as u32;
             }
-            // addr is a guest ptr pointing to the guest pointer pointing to the literal we
-            // want, thus we read the u32 addr points to get the addr to the literal
-            decoder::Instruction::LdrLiteral { rd, addr } => {
+            InstructionKind::LdrLiteral => {
+                let rd = decoder::bits(raw, 15, 12) as usize;
+                let imm12 = decoder::bits(raw, 11, 0);
+                let addr = self.pc().wrapping_add(8).wrapping_add(imm12);
                 self.r[rd as usize] = self.mem.read_u32(addr).expect("Segfault");
             }
-            decoder::Instruction::Unknown(w) => {
-                return Err(err::Err::UnknownOrUnsupportedInstruction(w));
+            InstructionKind::Unknown => {
+                return Err(err::Err::UnknownOrUnsupportedInstruction(raw));
             }
             i => {
                 stinkln!(
