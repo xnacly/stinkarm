@@ -8,7 +8,6 @@ const NULL_PAGE_SIZE: u32 = 0x1000;
 pub struct Mem {
     ptr: NonNull<u8>,
     len: usize,
-    bounds_checks: bool,
 }
 
 impl Default for Mem {
@@ -23,14 +22,6 @@ impl Mem {
     }
 
     pub fn with_size(size: usize) -> Self {
-        Self::with_size_and_bounds_checks(size, true)
-    }
-
-    pub fn with_bounds_checks(bounds_checks: bool) -> Self {
-        Self::with_size_and_bounds_checks(DEFAULT_GUEST_MEMORY_SIZE, bounds_checks)
-    }
-
-    pub fn with_size_and_bounds_checks(size: usize, bounds_checks: bool) -> Self {
         let ptr = mmap::mmap(
             None,
             size,
@@ -41,11 +32,7 @@ impl Mem {
         )
         .expect("failed to allocate guest memory");
 
-        Self {
-            ptr,
-            len: size,
-            bounds_checks,
-        }
+        Self { ptr, len: size }
     }
 
     /// Copy bytes into guest memory at `guest_addr`.
@@ -73,7 +60,7 @@ impl Mem {
 
     /// Translate a guest address range to a host pointer to the first byte.
     pub fn translate_range(&self, guest_addr: u32, len: usize) -> Option<*mut u8> {
-        if self.bounds_checks && !self.in_bounds(guest_addr, len) {
+        if !self.in_bounds(guest_addr, len) {
             return None;
         }
 
@@ -81,26 +68,11 @@ impl Mem {
     }
 
     pub fn read_u32(&self, guest_addr: u32) -> Option<u32> {
-        if self.bounds_checks {
-            let bytes = self.get_slice(guest_addr, 4)?;
-            return Some(u32::from_le_bytes(bytes.try_into().ok()?));
-        }
-
-        let ptr = self.translate_range(guest_addr, 4)?;
-        Some(u32::from_le(unsafe {
-            (ptr as *const u32).read_unaligned()
-        }))
+        let bytes = self.get_slice(guest_addr, 4)?;
+        Some(u32::from_le_bytes(bytes.try_into().unwrap()))
     }
 
     pub fn write_u32(&mut self, guest_addr: u32, value: u32) -> Result<(), &'static str> {
-        if self.bounds_checks {
-            let dst = self
-                .get_slice_mut(guest_addr, 4)
-                .ok_or("Failed compute host addr to write to")?;
-            dst.copy_from_slice(&value.to_le_bytes());
-            return Ok(());
-        }
-
         let ptr = self
             .translate_range(guest_addr, 4)
             .ok_or("Failed compute host addr to write to")?;
@@ -109,10 +81,6 @@ impl Mem {
     }
 
     fn get_slice(&self, guest_addr: u32, len: usize) -> Option<&[u8]> {
-        if self.bounds_checks && !self.in_bounds(guest_addr, len) {
-            return None;
-        }
-
         if !self.in_bounds(guest_addr, len) {
             return None;
         }
@@ -121,10 +89,6 @@ impl Mem {
     }
 
     fn get_slice_mut(&mut self, guest_addr: u32, len: usize) -> Option<&mut [u8]> {
-        if self.bounds_checks && !self.in_bounds(guest_addr, len) {
-            return None;
-        }
-
         if !self.in_bounds(guest_addr, len) {
             return None;
         }
@@ -177,14 +141,6 @@ mod tests {
         assert!(mem.translate(0xfff).is_none());
         assert!(mem.translate_range(0x1ffe, 2).is_some());
         assert!(mem.translate_range(0x1ffe, 3).is_none());
-    }
-
-    #[test]
-    fn unchecked_translation_skips_bounds_checks() {
-        let mem = Mem::with_size_and_bounds_checks(0x2000, false);
-
-        assert!(mem.translate(0).is_some());
-        assert!(mem.translate_range(0xffff_ffff, 4).is_some());
     }
 
     #[test]

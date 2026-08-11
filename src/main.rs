@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use clap::Parser;
 use std::{fs::File, io::Read, process::exit};
 
@@ -42,7 +41,7 @@ fn main() {
         stinkln!("\\\n{}", elf);
     }
 
-    let mut mem = mem::Mem::with_bounds_checks(!conf.allow_host_memory_corruption);
+    let mut mem = mem::Mem::new();
 
     for phdr in elf.pheaders {
         if phdr.r#type == elf::pheader::Type::LOAD {
