@@ -19,78 +19,67 @@ pub enum InstructionKind {
 
 struct ArmRule {
     kind: InstructionKind,
-    fixed: &'static [(u8, u8, u32)],
+    mask: u32,
+    value: u32,
 }
 
-// Build a classification rule from fixed bit ranges.
+// Build a classification rule from fixed bit ranges. Each rule becomes a
+// single `(word & mask) == value` comparison.
 //
-// This macro does not decode instruction operands. It only records enough
-// metadata to answer "does this raw word belong to this instruction kind?".
-// `bits hi..lo = value` and `bit n = value` are inclusive bit matches.
+// This macro does not decode instruction operands. `bits(hi..lo = value)` and
+// `bit(n = value)` are inclusive bit matches.
 //
-// Example:
-// `arm_rule!(Branch { bits 27..25 = 0b101 })`
+// Example: `arm_rule!(Branch { bits(27..25 = 0b101) })`
 // means "classify as Branch when bits 27..25 equal 101".
 macro_rules! arm_rule {
-    ($kind:ident { $($fixed:tt)* }) => {
+    ($kind:ident { $($field:ident($($args:tt)*)),* $(,)? }) => {
         ArmRule {
             kind: InstructionKind::$kind,
-            fixed: arm_fixed!($($fixed)*),
+            mask: 0 $(| arm_mask!($field($($args)*)))*,
+            value: 0 $(| arm_value!($field($($args)*)))*,
         }
     };
 }
 
-macro_rules! arm_fixed {
-    (@acc [$($out:expr,)*]) => {
-        &[$($out),*]
+macro_rules! arm_mask {
+    (bit($bit:literal = $value:expr)) => {
+        1u32 << $bit
     };
-    (@acc [$($out:expr,)*] bit $bit:literal = $value:expr,) => {
-        arm_fixed!(@acc [$($out,)* ($bit, $bit, $value),])
+    (bits($high:literal .. $low:literal = $value:expr)) => {
+        ((1u32 << ($high - $low + 1)) - 1) << $low
     };
-    (@acc [$($out:expr,)*] bit $bit:literal = $value:expr, $($rest:tt)+) => {
-        arm_fixed!(@acc [$($out,)* ($bit, $bit, $value),] $($rest)+)
+}
+
+macro_rules! arm_value {
+    (bit($bit:literal = $value:expr)) => {
+        ($value as u32) << $bit
     };
-    (@acc [$($out:expr,)*] bit $bit:literal = $value:expr) => {
-        arm_fixed!(@acc [$($out,)* ($bit, $bit, $value),])
-    };
-    (@acc [$($out:expr,)*] bits $high:literal .. $low:literal = $value:expr,) => {
-        arm_fixed!(@acc [$($out,)* ($high, $low, $value),])
-    };
-    (@acc [$($out:expr,)*] bits $high:literal .. $low:literal = $value:expr, $($rest:tt)+) => {
-        arm_fixed!(@acc [$($out,)* ($high, $low, $value),] $($rest)+)
-    };
-    (@acc [$($out:expr,)*] bits $high:literal .. $low:literal = $value:expr) => {
-        arm_fixed!(@acc [$($out,)* ($high, $low, $value),])
-    };
-    () => {
-        &[]
-    };
-    ($($fixed:tt)*) => {
-        arm_fixed!(@acc [] $($fixed)*)
+    (bits($high:literal .. $low:literal = $value:expr)) => {
+        ($value as u32) << $low
     };
 }
 
 const DECODE_RULES: &[ArmRule] = &[
     arm_rule!(Svc {
-        bits 27..24 = 0b1111,
+        bits(27..24 = 0b1111),
     }),
     arm_rule!(Branch {
-        bits 27..25 = 0b101,
+        bits(27..25 = 0b101),
     }),
     // LDR literal: `ldr Rt, [pc, #imm12]`.
     arm_rule!(LdrLiteral {
-        bits 27..26 = 0b01, // load/store class
-        bit 24 = 1,         // P: pre-indexed address
-        bit 23 = 1,         // U: add positive offset
-        bit 22 = 0,         // B: word transfer, not byte
-        bit 21 = 0,         // W: no writeback
-        bit 20 = 1,         // L: load, not store
-        bits 19..16 = 15,   // Rn: base register is pc/r15
+        bits(27..26 = 0b01), // load/store class
+        bit(24 = 1),         // P: pre-indexed address
+        bit(23 = 1),         // U: add positive offset
+        bit(22 = 0),         // B: word transfer, not byte
+        bit(21 = 0),         // W: no writeback
+        bit(20 = 1),         // L: load, not store
+        bits(19..16 = 15),   // Rn: base register is pc/r15
     }),
     // MOV immediate: data-processing immediate with opcode 1101.
     arm_rule!(MovImm {
-        bits 27..25 = 0b001,
-        bits 24..21 = Op::Mov as u32,
+        bits(27..25 = 0b001),
+        bits(24..21 = Op::Mov as u32),
     }),
 ];
 
@@ -112,9 +101,7 @@ pub fn decode_word(word: u32) -> Decoded {
 
 impl ArmRule {
     fn matches(&self, word: u32) -> bool {
-        self.fixed
-            .iter()
-            .all(|&(high, low, value)| bits(word, high, low) == value)
+        (word & self.mask) == self.value
     }
 }
 
