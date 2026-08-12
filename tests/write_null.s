@@ -1,3 +1,4 @@
+@ stinkarm-test: address=0x8000; args=--log syscalls; exit=0; stdout-contains==EFAULT; stdout-not-contains=ignored
 @ Attempts to write seven bytes from guest address 0.
 @ The emulator should reject the null guest pointer with EFAULT.
 

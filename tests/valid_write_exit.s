@@ -1,3 +1,4 @@
+@ stinkarm-test: address=0x8000; exit=7; stdout=ok\n
 @ Writes a short in-bounds message to stdout, then exits with code 7.
 @ This is the happy-path e2e case for write and exit syscall handling.
 

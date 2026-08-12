@@ -17,6 +17,7 @@ pub enum Log {
     Elf,
     Syscalls,
     Memory,
+    Instructions,
 }
 
 #[derive(Debug, Parser)]
@@ -46,7 +47,7 @@ pub struct Config {
     pub log: Vec<Log>,
 
     /// Print all register up to r
-    #[arg(short)]
+    #[arg(short, default_value_t = 0)]
     pub r: u8,
 
     /// Log everything and anything

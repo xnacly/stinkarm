@@ -1,6 +1,11 @@
 use crate::{cpu, sys};
 
-pub fn write(cpu: &mut cpu::Cpu, fd: u32, buf: u32, len: u32) -> i32 {
+pub fn write<const PRINT_INSTR: bool>(
+    cpu: &mut cpu::Cpu<'_, PRINT_INSTR>,
+    fd: u32,
+    buf: u32,
+    len: u32,
+) -> i32 {
     if len == 0 {
         return 0;
     }

@@ -1,3 +1,4 @@
+@ stinkarm-test: address=0x8000; args=--log syscalls; exit=0; stdout-contains==EFAULT; stdout-not-contains=ignored
 @ Attempts to write from 0x08000000, exactly one byte past the default guest arena.
 @ The emulator should bounds-check the full write buffer and return EFAULT.
 

@@ -14,15 +14,16 @@ mod sandbox;
 /// translating various things from arm to x86
 mod translation;
 
-type SyscallHandlerFn = fn(&mut Cpu, ArmSyscall) -> i32;
+type SyscallHandlerFn<'cpu, const PRINT_INSTR: bool> =
+    fn(&mut Cpu<'cpu, PRINT_INSTR>, ArmSyscall) -> i32;
 
 /// Usermode emulation
-pub struct Cpu<'cpu> {
+pub struct Cpu<'cpu, const PRINT_INSTR: bool> {
     /// r0-r15 (r13=SP, r14=LR, r15=PC)
     pub r: [u32; 16],
     pub cpsr: u32,
     pub mem: &'cpu mut mem::Mem,
-    syscall_handler: SyscallHandlerFn,
+    syscall_handler: SyscallHandlerFn<'cpu, PRINT_INSTR>,
     /// only set by ArmSyscall::Exit, necessary to propagate exit code to the host
     pub status: Option<i32>,
 }
@@ -37,9 +38,12 @@ fn print_i32_or_errno(r: i32) -> i32 {
     r
 }
 
-impl<'cpu> Cpu<'cpu> {
+impl<'cpu, const PRINT_INSTR: bool> Cpu<'cpu, PRINT_INSTR> {
     pub fn new(conf: &'cpu config::Config, mem: &'cpu mut mem::Mem, pc: u32) -> Self {
-        let syscall_handler: SyscallHandlerFn = if conf.log.contains(&Log::Syscalls) {
+        let syscall_handler: SyscallHandlerFn<'cpu, PRINT_INSTR> = if conf
+            .log
+            .contains(&Log::Syscalls)
+        {
             match conf.syscalls {
                 SyscallMode::Forward => |cpu, syscall| {
                     println!("{}", syscall.print(cpu));
@@ -56,9 +60,9 @@ impl<'cpu> Cpu<'cpu> {
             }
         } else {
             match conf.syscalls {
-                SyscallMode::Forward => translation::syscall_forward,
-                SyscallMode::Sandbox => sandbox::syscall_sandbox,
-                SyscallMode::Deny => sandbox::syscall_deny,
+                SyscallMode::Forward => |cpu, syscall| translation::syscall_forward(cpu, syscall),
+                SyscallMode::Sandbox => |cpu, syscall| sandbox::syscall_sandbox(cpu, syscall),
+                SyscallMode::Deny => |cpu, syscall| sandbox::syscall_deny(cpu, syscall),
             }
         };
 
@@ -79,7 +83,7 @@ impl<'cpu> Cpu<'cpu> {
     }
 
     #[inline(always)]
-    fn instr_addr(&self) -> u32 {
+    pub fn instr_addr(&self) -> u32 {
         self.r[15] & !3
     }
 
@@ -108,11 +112,17 @@ impl<'cpu> Cpu<'cpu> {
     /// fetch-decode-execute step, will only return false on exit svc
     pub fn step(&mut self) -> Result<bool, err::Err> {
         let Some(word) = self.mem.read_u32(self.instr_addr()) else {
-            // TODO: somehow capture EOF and read error differently here.
-            return Ok(false);
+            return Err(err::Err::MemoryAccessViolation {
+                guest: self.instr_addr(),
+                instr: 0xDEADAFFE,
+            });
         };
 
         let Decoded { kind, cond, raw } = decoder::decode_word(word);
+
+        if PRINT_INSTR {
+            stinkln!("{:?} {:04b} {:X}", kind, cond, raw);
+        }
 
         // we dont execute this instruction, moving along
         if !self.cond_passes(cond) {
@@ -120,9 +130,9 @@ impl<'cpu> Cpu<'cpu> {
             return Ok(true);
         }
 
-        // we keep track of PC, if an instruction writes to it, then we should not advance,
+        // we keep track of PC changes, if an instruction writes to it, then we should not advance,
         // otherwise, we advance.
-        let pc_before = self.r[15];
+        let mut pc_changed = false;
 
         match kind {
             InstructionKind::MovImm => {
@@ -150,6 +160,8 @@ impl<'cpu> Cpu<'cpu> {
             }
             InstructionKind::Branch => {
                 let l = decoder::bit(raw, 24);
+
+                // BL
                 if l {
                     // save return addr to LR (next addr though)
                     self.r[14] = self.instr_addr().wrapping_add(4);
@@ -160,20 +172,15 @@ impl<'cpu> Cpu<'cpu> {
                 let imm32 = decoder::sign_extend(imm26, 26);
 
                 self.r[15] = self.arm_pc().wrapping_add(imm32 as u32);
+                pc_changed = true;
             }
             InstructionKind::Unknown => {
+                stinkln!("found unimplemented instruction, exiting: {:#x}", word);
                 return Err(err::Err::UnknownOrUnsupportedInstruction(raw));
-            } // i => {
-              //     stinkln!(
-              //         "found unimplemented instruction, exiting: {:#x}:={:?}",
-              //         word,
-              //         i
-              //     );
-              //     return Err(err::Err::UnknownOrUnsupportedInstruction(raw));
-              // }
+            }
         }
 
-        if self.r[15] == pc_before {
+        if !pc_changed {
             self.advance();
         }
 

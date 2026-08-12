@@ -15,7 +15,7 @@ pub enum ArmSyscall {
 
 impl ArmSyscall {
     // TODO: rework this with some kind of writer
-    pub fn print(&self, cpu: &super::Cpu) -> String {
+    pub fn print<const PRINT_INSTR: bool>(&self, cpu: &super::Cpu<'_, PRINT_INSTR>) -> String {
         let mut buf = String::with_capacity(32);
         buf.push_str(&format!("{} {:?}(", std::process::id(), self));
         let args = match self {
@@ -51,7 +51,10 @@ impl TryFrom<u32> for ArmSyscall {
     }
 }
 
-pub fn syscall_forward(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
+pub fn syscall_forward<'cpu, const PRINT_INSTR: bool>(
+    cpu: &mut super::Cpu<'cpu, PRINT_INSTR>,
+    syscall: ArmSyscall,
+) -> i32 {
     match syscall {
         // we catch exit fully, since we need to do cleanup after the program is done
         ArmSyscall::exit => {

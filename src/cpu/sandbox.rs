@@ -1,6 +1,9 @@
 use crate::{cpu::translation::ArmSyscall, sys};
 
-pub fn syscall_sandbox(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
+pub fn syscall_sandbox<'cpu, const PRINT_INSTR: bool>(
+    cpu: &mut super::Cpu<'cpu, PRINT_INSTR>,
+    syscall: ArmSyscall,
+) -> i32 {
     match syscall {
         // we catch exit fully, since we need to do cleanup after the program is done
         ArmSyscall::exit => {
@@ -20,7 +23,10 @@ pub fn syscall_sandbox(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
     }
 }
 
-pub fn syscall_deny(cpu: &mut super::Cpu, syscall: ArmSyscall) -> i32 {
+pub fn syscall_deny<'cpu, const PRINT_INSTR: bool>(
+    cpu: &mut super::Cpu<'cpu, PRINT_INSTR>,
+    syscall: ArmSyscall,
+) -> i32 {
     // we catch exit fully, since we need to do cleanup after the program is done
     if let ArmSyscall::exit = syscall {
         cpu.status = Some(cpu.r[0] as i32)

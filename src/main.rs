@@ -43,7 +43,21 @@ fn main() {
 
     let mut mem = mem::Mem::new();
 
-    for phdr in elf.pheaders {
+    // The emulator's memory arena is much larger than the program image.  Keep
+    // the file-backed extent of the segment containing the entry point so the
+    // execution loop does not continue into its zero-filled tail.
+    let instr_end = elf
+        .pheaders
+        .iter()
+        .find(|phdr| {
+            phdr.r#type == elf::pheader::Type::LOAD
+                && elf.header.entry >= phdr.vaddr
+                && elf.header.entry < phdr.vaddr.saturating_add(phdr.filesz)
+        })
+        .and_then(|phdr| phdr.vaddr.checked_add(phdr.filesz))
+        .expect("Entry point is not in a loadable instruction chunk");
+
+    for phdr in &elf.pheaders {
         if phdr.r#type == elf::pheader::Type::LOAD {
             phdr.map(&buf, &mut mem)
                 .expect("Mapping program header failed");
@@ -72,12 +86,35 @@ fn main() {
         );
     }
 
-    let mut cpu = cpu::Cpu::new(&conf, &mut mem, elf.header.entry);
+    if conf.log.contains(&Log::Instructions) {
+        run(
+            cpu::Cpu::<true>::new(&conf, &mut mem, elf.header.entry),
+            &conf,
+            instr_end,
+        );
+    } else {
+        run(
+            cpu::Cpu::<false>::new(&conf, &mut mem, elf.header.entry),
+            &conf,
+            instr_end,
+        );
+    }
+}
+
+fn run<const PRINT_INSTR: bool>(
+    mut cpu: cpu::Cpu<'_, PRINT_INSTR>,
+    conf: &config::Config,
+    instr_end: u32,
+) {
     if conf.verbose {
         stinkln!("starting the emulator");
     }
 
     loop {
+        if cpu.instr_addr() >= instr_end {
+            break;
+        }
+
         match cpu.step() {
             // EOI - end of instructions :^)
             Ok(false) => break,
