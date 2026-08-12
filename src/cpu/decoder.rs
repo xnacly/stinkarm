@@ -8,6 +8,9 @@ pub struct Decoded {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InstructionKind {
     MovImm,
+    /// Encoding A1
+    ///
+    /// See https://support.arm.com/documentation/ddi0406/b/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/B?lang=en
     Branch,
     Svc,
     LdrLiteral,
@@ -186,6 +189,12 @@ fn op_from_bits(bits: u8) -> Op {
 pub fn decode_rotated_imm(imm12: u32) -> u32 {
     let rotate = ((imm12 >> 8) & 0b1111) * 2;
     (imm12 & 0xff).rotate_right(rotate)
+}
+
+#[inline(always)]
+pub fn sign_extend(imm: u32, bits: u32) -> i32 {
+    let shift = 32 - bits;
+    ((imm << shift) as i32) >> shift
 }
 
 #[cfg(test)]

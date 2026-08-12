@@ -3,7 +3,7 @@ mod write;
 pub use write::write;
 
 #[repr(i32)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Errno {
     /// Operation not permitted
     EPERM = 1,
@@ -27,6 +27,13 @@ pub enum Errno {
     EFAULT = 14,
     /// System call unimplemented
     ENOSYS = 38,
+}
+
+impl Errno {
+    /// Encodes self as a linux errno
+    pub fn as_ret(&self) -> u32 {
+        -(*self as i32) as u32
+    }
 }
 
 impl From<i32> for Errno {

@@ -14,3 +14,8 @@ path = "src/main.rs"
 [[bin]]
 name = "srun"
 path = "tools/srun.rs"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"

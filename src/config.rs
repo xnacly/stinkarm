@@ -45,6 +45,10 @@ pub struct Config {
     #[arg(short, long)]
     pub log: Vec<Log>,
 
+    /// Print all register up to r
+    #[arg(short)]
+    pub r: u8,
+
     /// Log everything and anything
     #[arg(short = 'v', long)]
     pub verbose: bool,

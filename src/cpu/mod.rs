@@ -79,8 +79,13 @@ impl<'cpu> Cpu<'cpu> {
     }
 
     #[inline(always)]
-    fn pc(&self) -> u32 {
-        self.r[15] & !0b11
+    fn instr_addr(&self) -> u32 {
+        self.r[15] & !3
+    }
+
+    #[inline(always)]
+    fn arm_pc(&self) -> u32 {
+        self.instr_addr().wrapping_add(8)
     }
 
     /// moves pc forward a word
@@ -102,16 +107,10 @@ impl<'cpu> Cpu<'cpu> {
 
     /// fetch-decode-execute step, will only return false on exit svc
     pub fn step(&mut self) -> Result<bool, err::Err> {
-        let Some(word) = self.mem.read_u32(self.pc()) else {
-            // TODO: segfault of some kind, do more research before creating a
-            // err::Err::UnallowedMemoryAccess or something
+        let Some(word) = self.mem.read_u32(self.instr_addr()) else {
+            // TODO: somehow capture EOF and read error differently here.
             return Ok(false);
         };
-
-        if word == 0 {
-            // zero instruction means we hit zeroed out rest of the page
-            return Ok(false);
-        }
 
         let Decoded { kind, cond, raw } = decoder::decode_word(word);
 
@@ -121,6 +120,10 @@ impl<'cpu> Cpu<'cpu> {
             return Ok(true);
         }
 
+        // we keep track of PC, if an instruction writes to it, then we should not advance,
+        // otherwise, we advance.
+        let pc_before = self.r[15];
+
         match kind {
             InstructionKind::MovImm => {
                 let rd = decoder::bits(raw, 15, 12) as usize;
@@ -128,28 +131,51 @@ impl<'cpu> Cpu<'cpu> {
                 self.r[rd] = decoder::decode_rotated_imm(imm12);
             }
             InstructionKind::Svc => {
-                self.r[0] = (self.syscall_handler)(self, ArmSyscall::try_from(self.r[7])?) as u32;
+                self.r[0] = match ArmSyscall::try_from(self.r[7]) {
+                    Ok(kind) => (self.syscall_handler)(self, kind) as u32,
+                    Err(_) => sys::Errno::ENOSYS.as_ret(),
+                };
             }
             InstructionKind::LdrLiteral => {
                 let rd = decoder::bits(raw, 15, 12) as usize;
                 let imm12 = decoder::bits(raw, 11, 0);
-                let addr = self.pc().wrapping_add(8).wrapping_add(imm12);
-                self.r[rd as usize] = self.mem.read_u32(addr).expect("Segfault");
+                let addr = self.arm_pc().wrapping_add(imm12);
+                self.r[rd] =
+                    self.mem
+                        .read_u32(addr)
+                        .ok_or_else(|| err::Err::MemoryAccessViolation {
+                            guest: addr,
+                            instr: raw,
+                        })?;
+            }
+            InstructionKind::Branch => {
+                let l = decoder::bit(raw, 24);
+                if l {
+                    // save return addr to LR (next addr though)
+                    self.r[14] = self.instr_addr().wrapping_add(4);
+                }
+
+                let imm24 = decoder::bits(raw, 23, 0);
+                let imm26 = imm24 << 2;
+                let imm32 = decoder::sign_extend(imm26, 26);
+
+                self.r[15] = self.arm_pc() + imm32 as u32;
             }
             InstructionKind::Unknown => {
                 return Err(err::Err::UnknownOrUnsupportedInstruction(raw));
-            }
-            i => {
-                stinkln!(
-                    "found unimplemented instruction, exiting: {:#x}:={:?}",
-                    word,
-                    i
-                );
-                self.status = Some(1);
-            }
+            } // i => {
+              //     stinkln!(
+              //         "found unimplemented instruction, exiting: {:#x}:={:?}",
+              //         word,
+              //         i
+              //     );
+              //     return Err(err::Err::UnknownOrUnsupportedInstruction(raw));
+              // }
         }
 
-        self.advance();
+        if self.r[15] == pc_before {
+            self.advance();
+        }
 
         Ok(true)
     }

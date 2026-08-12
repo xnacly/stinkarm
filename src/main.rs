@@ -60,11 +60,11 @@ fn main() {
         }
     }
 
-    let entry = mem
-        .translate(elf.header.entry)
-        .unwrap_or(std::ptr::null_mut());
-
     if conf.verbose {
+        let entry = mem
+            .translate(elf.header.entry)
+            .unwrap_or(std::ptr::null_mut());
+
         stinkln!(
             "jumping to entry G={:#X} at H={:?}",
             elf.header.entry,
@@ -76,6 +76,7 @@ fn main() {
     if conf.verbose {
         stinkln!("starting the emulator");
     }
+
     loop {
         match cpu.step() {
             // EOI - end of instructions :^)
@@ -96,5 +97,11 @@ fn main() {
     if conf.verbose {
         stinkln!("exiting with `{}`", status);
     }
+
+    if conf.r > 0 {
+        let r = cpu.r[conf.r as usize];
+        stinkln!("r[{}]={}/0x{:X}", conf.r, r, r);
+    }
+
     exit(status);
 }
