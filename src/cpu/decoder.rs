@@ -186,7 +186,7 @@ fn op_from_bits(bits: u8) -> Op {
 ///
 /// For example, imm12 `0xc01` means imm8 `0x01` rotated right by 24 bits,
 /// which produces `0x00000100`.
-pub fn decode_rotated_imm(imm12: u32) -> u32 {
+pub fn rotated_imm(imm12: u32) -> u32 {
     let rotate = ((imm12 >> 8) & 0b1111) * 2;
     (imm12 & 0xff).rotate_right(rotate)
 }

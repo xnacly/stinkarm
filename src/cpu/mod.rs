@@ -138,7 +138,7 @@ impl<'cpu, const PRINT_INSTR: bool> Cpu<'cpu, PRINT_INSTR> {
             InstructionKind::MovImm => {
                 let rd = decoder::bits(raw, 15, 12) as usize;
                 let imm12 = decoder::bits(raw, 11, 0);
-                self.r[rd] = decoder::decode_rotated_imm(imm12);
+                self.r[rd] = decoder::rotated_imm(imm12);
             }
             InstructionKind::Svc => {
                 self.r[0] = match ArmSyscall::try_from(self.r[7]) {
