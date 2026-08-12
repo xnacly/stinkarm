@@ -159,7 +159,7 @@ impl<'cpu> Cpu<'cpu> {
                 let imm26 = imm24 << 2;
                 let imm32 = decoder::sign_extend(imm26, 26);
 
-                self.r[15] = self.arm_pc() + imm32 as u32;
+                self.r[15] = self.arm_pc().wrapping_add(imm32 as u32);
             }
             InstructionKind::Unknown => {
                 return Err(err::Err::UnknownOrUnsupportedInstruction(raw));

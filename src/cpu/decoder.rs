@@ -192,9 +192,11 @@ pub fn decode_rotated_imm(imm12: u32) -> u32 {
 }
 
 #[inline(always)]
-pub fn sign_extend(imm: u32, bits: u32) -> i32 {
+pub fn sign_extend(value: u32, bits: u32) -> i32 {
+    debug_assert!((1..=32).contains(&bits));
+
     let shift = 32 - bits;
-    ((imm << shift) as i32) >> shift
+    ((value << shift) as i32) >> shift
 }
 
 #[cfg(test)]
