@@ -8,7 +8,7 @@ pub struct Decoded {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InstructionKind {
     MovImm,
-    /// Encoding A1
+    /// Only encoding A1 is supported
     ///
     /// See https://support.arm.com/documentation/ddi0406/b/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/B?lang=en
     Branch,

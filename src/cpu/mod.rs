@@ -99,6 +99,7 @@ impl<'cpu, const PRINT_INSTR: bool> Cpu<'cpu, PRINT_INSTR> {
     }
 
     #[inline(always)]
+    /// see [ARMv7 Condition code suffixes](https://support.arm.com/documentation/den0042/0100/Unified-Assembly-Language-Instructions/Instruction-set-basics/Conditional-execution?lang=en#md260-conditional-execution__tbl_cond_code_suffixes)
     fn cond_passes(&self, cond: u8) -> bool {
         match cond {
             0x0 => (self.cpsr >> 30) & 1 == 1, // EQ: Z == 1
@@ -160,7 +161,6 @@ impl<'cpu, const PRINT_INSTR: bool> Cpu<'cpu, PRINT_INSTR> {
             }
             InstructionKind::Branch => {
                 let l = decoder::bit(raw, 24);
-
                 // BL
                 if l {
                     // save return addr to LR (next addr though)
